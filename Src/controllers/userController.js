@@ -42,7 +42,16 @@ exports.updateProfile = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    // FIXED: Check if role filter is provided in query params
+    const { role } = req.query;
+    
+    let query = {};
+    if (role) {
+      // Filter by role if provided (e.g., ?role=client)
+      query.roles = role;
+    }
+    
+    const users = await User.find(query).select('-password');
     
     // FIXED: Consistent response format
     res.json({
