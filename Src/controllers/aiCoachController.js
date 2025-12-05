@@ -3,9 +3,46 @@
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 
-// Initialize Gemini
+// Initialize AI providers with fallback
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Model configurations with fallback chain
+const MODELS = {
+  gemini: ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro'],
+  openai: 'gpt-4o-mini' // Cheap, fast, good for coaching
+};
+
+// Helper: Generate content with automatic fallback
+async function generateAIContent(prompt) {
+  // Try Gemini models first
+  for (const modelName of MODELS.gemini) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return { text: response.text(), source: `gemini-${modelName}` };
+    } catch (error) {
+      console.warn(`[AI Coach] ${modelName} failed:`, error.message);
+      continue; // Try next model
+    }
+  }
+
+  // Fallback to OpenAI
+  try {
+    const completion = await openai.chat.completions.create({
+      model: MODELS.openai,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000
+    });
+    return { text: completion.choices[0].message.content, source: 'openai' };
+  } catch (error) {
+    console.error('[AI Coach] All AI providers failed:', error);
+    throw new Error('AI services temporarily unavailable. Please try again.');
+  }
+}
 
 // ============================================
 // GET MY AI COACH
@@ -168,11 +205,10 @@ Return as JSON with this structure:
   "deloadRecommendations": "string"
 }`;
 
-    // Use Gemini Pro for complex program generation
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let programText = response.text();
+    // Use AI with automatic fallback for program generation
+    const aiResponse = await generateAIContent(prompt);
+    let programText = aiResponse.text;
+    console.log(`[AI Coach] Program generated from ${aiResponse.source}`);
 
     // Try to parse as JSON
     let program;
@@ -260,11 +296,10 @@ Return JSON:
   "difficulty": "beginner|intermediate|advanced"
 }`;
 
-    // Use Gemini Flash for quick workout generation (FREE)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let workoutText = response.text();
+    // Use AI with automatic fallback
+    const aiResponse = await generateAIContent(prompt);
+    let workoutText = aiResponse.text;
+    console.log(`[AI Coach] Workout generated from ${aiResponse.source}`);
 
     let workout;
     try {
@@ -340,11 +375,10 @@ QUESTION: ${question}
 
 Provide a helpful, actionable answer. Be concise but thorough. Never give medical advice - refer to a doctor for health concerns.`;
 
-    // Use Gemini Flash for quick Q&A (FREE)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const answer = response.text();
+    // Use AI with automatic fallback
+    const aiResponse = await generateAIContent(prompt);
+    const answer = aiResponse.text;
+    console.log(`[AI Coach] Response from ${aiResponse.source}`);
 
     await aiCoach.incrementQueryCount();
 
