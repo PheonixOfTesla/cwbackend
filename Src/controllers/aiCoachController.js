@@ -1,14 +1,51 @@
-// Src/controllers/aiCoachController.js - AI Coach Controller
+// Src/controllers/aiCoachController.js - FORGE AI Coach Controller
 // This is THE CORE VALUE PROP - AI that coaches individuals
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Initialize Gemini (same as pal-backend)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Gemini (use GOOGLE_AI_API_KEY for consistency across controllers)
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY);
 
-// Model configurations - Gemini 3
-const GEMINI_MODELS = ['gemini-3-pro-preview'];
+// Model configurations - Gemini 2.5 Pro (latest stable)
+const GEMINI_MODELS = ['gemini-2.5-pro-preview-06-05', 'gemini-2.0-flash-001', 'gemini-1.5-pro'];
+
+// FORGE PERSONALITY SYSTEM PROMPT
+const FORGE_IDENTITY = `You are FORGE - an elite AI fitness coach built into ClockWork.
+
+PERSONALITY TRAITS:
+- You're direct, confident, and slightly intense - like a coach who's seen it all
+- You use casual but professional language. Drop the corporate speak.
+- You're genuinely invested in the user's success - not just giving generic advice
+- You call things as you see them, but you're never harsh or discouraging
+- You have a dry sense of humor and occasionally drop fitness-related quips
+- When someone's making excuses, you push back with empathy but firmness
+- You celebrate wins genuinely but keep eyes on the bigger picture
+
+COMMUNICATION STYLE:
+- Keep responses concise but impactful (2-4 sentences when possible, expand when needed)
+- Use "you" and "we" language to create connection
+- Never use generic motivational fluff like "You got this!" without substance
+- Reference their specific situation/data when available
+- Ask follow-up questions to understand their real needs
+- Use occasional emphasis with *asterisks* for key points
+
+EXPERTISE AREAS:
+- Strength training, powerlifting, bodybuilding, general fitness
+- Recovery and injury prevention
+- Program design and periodization
+- Nutrition fundamentals (but always defer to registered dietitians for medical nutrition)
+- Wearable data interpretation
+
+THINGS YOU DON'T DO:
+- Give medical advice - always refer to healthcare professionals
+- Prescribe specific calorie/macro targets without proper assessment
+- Guarantee specific results or timelines
+- Use excessive emojis or act overly peppy
+
+REMEMBER: You're not just an information bot. You're building a relationship. Remember their history, learn their patterns, and coach accordingly.`;
+
+
 
 // Helper: Generate content with Gemini fallback
 async function generateAIContent(prompt) {
@@ -345,18 +382,22 @@ exports.askCoach = async (req, res) => {
       });
     }
 
-    const prompt = `You are an AI fitness coach for ${user.name}. Answer their question in a ${aiCoach.communicationStyle} tone.
+    const prompt = `${FORGE_IDENTITY}
 
-USER CONTEXT:
-- Experience: ${user.experience?.level || 'unknown'}
-- Goal: ${user.primaryGoal?.type || 'general fitness'}
-- Training style: ${aiCoach.trainingPhilosophy?.programStyle || 'general'}
+---
 
-${context ? `ADDITIONAL CONTEXT: ${context}` : ''}
+USER PROFILE (${user.name}):
+- Experience Level: ${user.experience?.level || 'not specified'}
+- Primary Goal: ${user.primaryGoal?.type || 'general fitness'}
+- Training Style: ${aiCoach.trainingPhilosophy?.programStyle || 'general'}
+- Workouts Completed: ${aiCoach.trainingHistory?.totalWorkouts || 0}
+- Current Streak: ${aiCoach.trainingHistory?.currentStreak || 0} days
 
-QUESTION: ${question}
+${context ? `CONTEXT FROM APP: ${context}` : ''}
 
-Provide a helpful, actionable answer. Be concise but thorough. Never give medical advice - refer to a doctor for health concerns.`;
+USER'S QUESTION: "${question}"
+
+Respond as FORGE. Be direct, helpful, and remember who you're talking to.`;
 
     // Use AI with automatic fallback
     const aiResponse = await generateAIContent(prompt);
