@@ -463,32 +463,32 @@ exports.resetPasswordRequest = async (req, res) => {
             });
         }
 
-        // Generate 3-digit code
-        const resetCode = Math.floor(100 + Math.random() * 900).toString();
-        const resetToken = crypto.createHash('sha256').update(resetCode).digest('hex');
-
-        user.resetPasswordCode = resetToken;
-        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+        // Mark that reset was requested (for tracking)
+        user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
         await user.save();
 
-        // Send reset code via Twilio Verify
+        // Send reset code via Twilio Verify (standard 6-digit code)
         if (twilioClient && VERIFY_SERVICE_SID) {
             try {
-                // Use Twilio Verify with custom code template
                 await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
                     .verifications
                     .create({
                         to: email.toLowerCase(),
-                        channel: 'email',
-                        customCode: resetCode  // Send our 3-digit code
+                        channel: 'email'
                     });
                 console.log(`📧 Password reset code sent to: ${email}`);
             } catch (twilioError) {
                 console.error('Twilio reset email error:', twilioError.message);
-                // Continue anyway - code is saved in DB
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to send reset code. Please try again.'
+                });
             }
         } else {
-            console.log(`🔐 Password reset code for ${email}: ${resetCode} (Twilio not configured)`);
+            return res.status(500).json({
+                success: false,
+                message: 'Email service not configured'
+            });
         }
 
         res.json({
@@ -506,17 +506,24 @@ exports.resetPasswordRequest = async (req, res) => {
 };
 
 // ============================================
-// RESET PASSWORD WITH CODE
+// RESET PASSWORD WITH CODE (via Twilio Verify)
 // ============================================
 exports.resetPassword = async (req, res) => {
     try {
-        const { resetToken } = req.params;
-        const { password } = req.body;
+        const { resetToken } = req.params; // This is the 6-digit code
+        const { password, email } = req.body;
 
         if (!password) {
             return res.status(400).json({
                 success: false,
                 message: 'New password is required'
+            });
+        }
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
             });
         }
 
@@ -527,22 +534,45 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
-        const user = await User.findOne({
-            resetPasswordCode: hashedToken,
-            resetPasswordExpires: { $gt: Date.now() }
-        });
+        // Find user by email
+        const user = await User.findOne({ email: email.toLowerCase() });
 
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid or expired reset code'
+                message: 'Invalid reset request'
             });
         }
 
-        user.password = await bcrypt.hash(password, 10);
-        user.resetPasswordCode = undefined;
+        // Verify the code with Twilio
+        if (twilioClient && VERIFY_SERVICE_SID) {
+            try {
+                const verification = await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                    .verificationChecks
+                    .create({ to: email.toLowerCase(), code: resetToken });
+
+                if (verification.status !== 'approved') {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Invalid or expired reset code'
+                    });
+                }
+            } catch (twilioError) {
+                console.error('Twilio verification check error:', twilioError.message);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid or expired reset code'
+                });
+            }
+        } else {
+            return res.status(500).json({
+                success: false,
+                message: 'Verification service not configured'
+            });
+        }
+
+        // Code verified - reset password
+        user.password = password; // Will be hashed by pre-save hook
         user.resetPasswordExpires = undefined;
         await user.save();
 
