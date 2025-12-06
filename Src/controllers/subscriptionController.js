@@ -70,6 +70,16 @@ exports.createCheckout = async (req, res) => {
     let subscription = await Subscription.findOne({ userId: req.user.id });
     let customerId = subscription?.stripeCustomerId;
 
+    // Verify customer exists in Stripe (handles test/live mode mismatch)
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (err) {
+        console.log(`Customer ${customerId} not found in Stripe, creating new one`);
+        customerId = null; // Will create new customer below
+      }
+    }
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: req.user.email,
