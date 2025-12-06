@@ -27,6 +27,10 @@ router.post('/recurring', protect, calendarController.createRecurring);
 // POST /api/calendar/generate-week
 router.post('/generate-week', protect, calendarController.generateWeek);
 
+// Generate a full training month with FORGE
+// POST /api/calendar/generate-month
+router.post('/generate-month', protect, calendarController.generateMonth);
+
 // Update a calendar event
 // PUT /api/calendar/:eventId
 router.put('/:eventId', protect, calendarController.updateEvent);

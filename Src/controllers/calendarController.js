@@ -490,6 +490,243 @@ Include rest days where appropriate based on recovery data. Match the preferred 
 }
 
 /**
+ * Generate a full training month with AI (FORGE)
+ * POST /api/calendar/generate-month
+ */
+exports.generateMonth = async (req, res) => {
+  try {
+    const userId = req.body.userId || req.user.id;
+    const { startDate } = req.body;
+
+    // Fetch user data
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Fetch recent check-ins for context
+    const checkIns = await CheckIn.find({ userId })
+      .sort('-date')
+      .limit(14);
+
+    // Fetch latest wearable data
+    const wearableData = await WearableData.findOne({ userId })
+      .sort('-date');
+
+    // Fetch recent workouts for context
+    const recentWorkouts = await Workout.find({ clientId: userId })
+      .sort('-scheduledDate')
+      .limit(20);
+
+    // Build AI prompt for monthly plan
+    const prompt = buildMonthlyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate);
+
+    // Generate with Gemini
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        message: 'AI API key not configured'
+      });
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: 'models/gemini-2.5-pro',
+      generationConfig: {
+        temperature: 0.7,
+        topK: 64,
+        topP: 0.95,
+        maxOutputTokens: 8192
+      }
+    });
+
+    console.log('🔥 FORGE generating monthly training program...');
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const aiText = response.text();
+
+    // Parse JSON from AI response
+    let plan;
+    try {
+      const jsonMatch = aiText.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+                        aiText.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiText;
+      plan = JSON.parse(jsonStr.trim());
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to parse AI-generated plan',
+        aiResponse: aiText
+      });
+    }
+
+    // Create calendar events from plan
+    const monthStart = startDate ? new Date(startDate) : new Date();
+    monthStart.setHours(0, 0, 0, 0);
+
+    const events = [];
+    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+    // Process each week in the plan
+    for (let weekIndex = 0; weekIndex < (plan.weeks || []).length; weekIndex++) {
+      const week = plan.weeks[weekIndex];
+      const weekStart = new Date(monthStart);
+      weekStart.setDate(weekStart.getDate() + (weekIndex * 7));
+
+      for (const day of (week.days || [])) {
+        const dayIndex = daysOfWeek.indexOf(day.dayOfWeek?.toLowerCase());
+        if (dayIndex === -1) continue;
+
+        const eventDate = new Date(weekStart);
+        const currentDayIndex = weekStart.getDay();
+        const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
+        eventDate.setDate(eventDate.getDate() + daysToAdd);
+
+        const eventData = {
+          userId,
+          type: day.type || 'workout',
+          title: day.workoutName || day.title || `${day.type || 'Workout'} Day`,
+          description: day.description || (day.exercises ? day.exercises.map(e => `${e.name}: ${e.sets}x${e.reps}`).join(', ') : ''),
+          date: eventDate,
+          startTime: day.startTime || user.schedule?.preferredTime || '09:00',
+          duration: day.duration || user.schedule?.sessionDuration || 60,
+          aiGenerated: true,
+          aiReason: `Week ${weekIndex + 1}: ${week.focus || 'FORGE-generated program'}`,
+          status: 'scheduled',
+          workoutDetails: day.exercises || []
+        };
+
+        events.push(eventData);
+      }
+    }
+
+    // Insert all events
+    const createdEvents = await CalendarEvent.insertMany(events);
+
+    console.log(`✅ FORGE created ${createdEvents.length} training days for the month`);
+
+    res.json({
+      success: true,
+      data: {
+        plan,
+        events: createdEvents
+      },
+      message: `FORGE generated ${createdEvents.length} training days across ${plan.weeks?.length || 4} weeks`
+    });
+
+  } catch (error) {
+    console.error('Generate month error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Build prompt for monthly plan generation (FORGE)
+ */
+function buildMonthlyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate) {
+  const profile = user.profile || {};
+  const experience = user.experience || {};
+  const primaryGoal = user.primaryGoal || {};
+  const schedule = user.schedule || {};
+  const equipment = user.equipment || {};
+  const limitations = user.limitations || {};
+
+  const avgReadiness = checkIns.length > 0
+    ? Math.round(checkIns.reduce((sum, c) => sum + (c.readinessScore || 50), 0) / checkIns.length)
+    : null;
+
+  const daysPerWeek = schedule.daysPerWeek || 4;
+
+  return `You are FORGE - an elite AI fitness coach. Generate a COMPLETE 4-WEEK periodized training program.
+
+═══════════════════════════════════════════════════════════
+ATHLETE PROFILE:
+═══════════════════════════════════════════════════════════
+- Name: ${user.name || 'Athlete'}
+- Experience: ${experience.level || 'intermediate'} (${experience.yearsTraining || 'N/A'} years)
+- Primary Discipline: ${experience.primaryDiscipline || 'general-fitness'}
+
+GOAL:
+- Type: ${primaryGoal.type || 'general-health'}
+${primaryGoal.targetWeight ? `- Target Weight: ${primaryGoal.targetWeight}` : ''}
+${primaryGoal.competition?.date ? `- Competition: ${primaryGoal.competition.type} on ${primaryGoal.competition.date}` : ''}
+${primaryGoal.strengthTargets?.squat?.target ? `- Squat Target: ${primaryGoal.strengthTargets.squat.target}` : ''}
+${primaryGoal.strengthTargets?.bench?.target ? `- Bench Target: ${primaryGoal.strengthTargets.bench.target}` : ''}
+${primaryGoal.strengthTargets?.deadlift?.target ? `- Deadlift Target: ${primaryGoal.strengthTargets.deadlift.target}` : ''}
+
+SCHEDULE:
+- Days per week: ${daysPerWeek}
+- Preferred days: ${schedule.preferredDays?.join(', ') || 'Monday, Tuesday, Thursday, Friday'}
+- Session length: ${schedule.sessionDuration || 60} minutes
+- Preferred time: ${schedule.preferredTime || 'flexible'}
+
+EQUIPMENT:
+- Location: ${equipment.trainingLocation || 'commercial-gym'}
+- Available: ${equipment.availableEquipment?.join(', ') || 'full gym access'}
+${equipment.limitations ? `- Limitations: ${equipment.limitations}` : ''}
+
+CURRENT STATE:
+${avgReadiness ? `- Average Readiness (14 days): ${avgReadiness}/100` : '- No check-in data'}
+${wearableData?.recoveryScore ? `- Latest Recovery Score: ${wearableData.recoveryScore}/100` : ''}
+${wearableData?.sleepDuration ? `- Latest Sleep: ${(wearableData.sleepDuration / 60).toFixed(1)}h` : ''}
+
+${limitations.injuries?.length ? `
+INJURIES/LIMITATIONS:
+${limitations.injuries.map(i => `- ${i.bodyPart}: ${i.description}`).join('\n')}
+` : ''}
+${limitations.exercisesToAvoid?.length ? `Avoid exercises: ${limitations.exercisesToAvoid.join(', ')}` : ''}
+
+═══════════════════════════════════════════════════════════
+GENERATE A 4-WEEK PERIODIZED PROGRAM STARTING ${startDate || 'TODAY'}
+═══════════════════════════════════════════════════════════
+
+Use proper periodization:
+- Week 1: Foundation/Accumulation (moderate volume, moderate intensity)
+- Week 2: Building (increased volume)
+- Week 3: Intensification (peak intensity)
+- Week 4: Deload (reduced volume for recovery)
+
+Return ONLY valid JSON (no markdown explanation outside the JSON):
+{
+  "programName": "string - creative program name",
+  "description": "string - FORGE's coaching philosophy for this month",
+  "periodization": "linear|undulating|block",
+  "weeks": [
+    {
+      "weekNumber": 1,
+      "focus": "Accumulation - Building Base",
+      "days": [
+        {
+          "dayOfWeek": "monday",
+          "type": "workout",
+          "workoutName": "Upper Power",
+          "description": "Focus on compound movements",
+          "duration": 60,
+          "exercises": [
+            {
+              "name": "Bench Press",
+              "sets": 4,
+              "reps": "6-8",
+              "rpe": 7,
+              "notes": "Control the eccentric"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Generate EXACTLY ${daysPerWeek} training days per week on the preferred days. Include rest day entries for other days.`;
+}
+
+/**
  * Create a recurring event series
  * POST /api/calendar/recurring
  */

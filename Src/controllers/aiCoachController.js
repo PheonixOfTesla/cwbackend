@@ -3,12 +3,15 @@
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 
-// Initialize Gemini (use GOOGLE_AI_API_KEY for consistency across controllers)
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY);
+// Initialize AI providers
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || '');
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
 
-// Model configurations - Gemini 2.5 Pro (latest stable)
+// Model configurations
 const GEMINI_MODELS = ['gemini-2.5-pro-preview-06-05', 'gemini-2.0-flash-001', 'gemini-1.5-pro'];
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022'; // Haiku 3.5 - fast & cost-effective
 
 // FORGE PERSONALITY SYSTEM PROMPT
 const FORGE_IDENTITY = `You are FORGE - an elite AI fitness coach built into ClockWork.
@@ -47,21 +50,39 @@ REMEMBER: You're not just an information bot. You're building a relationship. Re
 
 
 
-// Helper: Generate content with Gemini fallback
-async function generateAIContent(prompt) {
+// Helper: Generate content with Claude primary, Gemini fallback
+async function generateAIContent(prompt, systemPrompt = null) {
+  // Try Claude first (better for coaching conversations)
+  if (anthropic) {
+    try {
+      const message = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt || FORGE_IDENTITY,
+        messages: [{ role: 'user', content: prompt }]
+      });
+      console.log('[FORGE] Response from Claude');
+      return { text: message.content[0].text, source: 'claude' };
+    } catch (error) {
+      console.warn('[FORGE] Claude failed:', error.message);
+    }
+  }
+
+  // Fallback to Gemini models
   for (const modelName of GEMINI_MODELS) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
+      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+      const result = await model.generateContent(fullPrompt);
       const response = await result.response;
-      console.log(`[AI Coach] Response from ${modelName}`);
+      console.log(`[FORGE] Response from ${modelName}`);
       return { text: response.text(), source: modelName };
     } catch (error) {
-      console.warn(`[AI Coach] ${modelName} failed:`, error.message);
+      console.warn(`[FORGE] ${modelName} failed:`, error.message);
       continue;
     }
   }
-  throw new Error('AI service temporarily unavailable');
+  throw new Error('AI service temporarily unavailable - please try again');
 }
 
 // ============================================
@@ -386,12 +407,12 @@ function detectActionIntent(question) {
 }
 
 // ============================================
-// ASK COACH (General Q&A + Actions)
+// ASK COACH (General Q&A + Actions) WITH CONVERSATION MEMORY
 // ============================================
 exports.askCoach = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { question, context } = req.body;
+    const { question, context, conversationHistory } = req.body;
 
     if (!question) {
       return res.status(400).json({
@@ -482,7 +503,24 @@ exports.askCoach = async (req, res) => {
       }
     }
 
+    // Build conversation history string
+    let conversationContext = '';
+    if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      conversationContext = `
+---
+CONVERSATION HISTORY (REMEMBER THIS - DO NOT ASK QUESTIONS THAT WERE ALREADY ANSWERED):
+${conversationHistory.map(msg => `${msg.role === 'user' ? 'USER' : 'FORGE'}: ${msg.content}`).join('\n')}
+---
+`;
+    }
+
     const prompt = `${FORGE_IDENTITY}
+
+CRITICAL RULES:
+1. NEVER ask a question that was already answered in the conversation history
+2. If the user already told you their lifts, competition, timeline, etc. - REMEMBER IT
+3. When you have the info you need, TAKE ACTION - propose a program, give specific advice
+4. Be a COACH, not an interrogator. Use the information they gave you.
 
 ---
 
@@ -494,12 +532,12 @@ USER PROFILE (${user.name}):
 - Current Streak: ${aiCoach.trainingHistory?.currentStreak || 0} days
 - Training Days: ${user.schedule?.daysPerWeek || 4} days/week
 - Preferred Days: ${user.schedule?.preferredDays?.join(', ') || 'flexible'}
-
+${conversationContext}
 ${context ? `CONTEXT FROM APP: ${context}` : ''}
 
-USER'S MESSAGE: "${question}"${actionPromptAddition}
+USER'S CURRENT MESSAGE: "${question}"${actionPromptAddition}
 
-Respond as FORGE. Be direct, helpful, and remember who you're talking to.`;
+Respond as FORGE. Be direct, helpful, and use ALL information from the conversation history. DO NOT repeat questions.`;
 
     // Use AI with automatic fallback
     const aiResponse = await generateAIContent(prompt);
