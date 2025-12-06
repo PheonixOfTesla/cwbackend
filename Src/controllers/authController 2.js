@@ -5,40 +5,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// Twilio Verify for email verification (with validation)
+// Twilio Verify for email verification
 const twilio = require('twilio');
-let twilioClient = null;
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null;
 const VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE;
-
-// Only initialize Twilio if credentials are valid
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-if (accountSid && authToken && accountSid.startsWith('AC')) {
-    try {
-        twilioClient = twilio(accountSid, authToken);
-        console.log('✅ Twilio client initialized successfully');
-    } catch (err) {
-        console.error('⚠️ Twilio initialization failed:', err.message);
-    }
-} else if (accountSid && !accountSid.startsWith('AC')) {
-    console.error('⚠️ TWILIO_ACCOUNT_SID is invalid (must start with AC). Current value starts with:', accountSid.substring(0, 4));
-} else {
-    console.log('⚠️ Twilio not configured - email verification disabled');
-}
-
-// ============================================
-// DEBUG: Check Twilio Status
-// ============================================
-exports.twilioStatus = async (req, res) => {
-    res.json({
-        twilioConfigured: !!twilioClient,
-        verifyServiceConfigured: !!VERIFY_SERVICE_SID,
-        accountSidSet: !!accountSid,
-        accountSidPrefix: accountSid ? accountSid.substring(0, 4) : null,
-        authTokenSet: !!authToken,
-        verifyServiceSid: VERIFY_SERVICE_SID ? VERIFY_SERVICE_SID.substring(0, 10) + '...' : null
-    });
-};
 
 // ============================================
 // REGISTER (Updated for userType)
@@ -440,7 +412,7 @@ exports.logout = async (req, res) => {
 };
 
 // ============================================
-// REQUEST PASSWORD RESET (via Twilio Verify email)
+// REQUEST PASSWORD RESET
 // ============================================
 exports.resetPasswordRequest = async (req, res) => {
     try {
@@ -471,30 +443,20 @@ exports.resetPasswordRequest = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         await user.save();
 
-        // Send reset code via Twilio Verify
-        if (twilioClient && VERIFY_SERVICE_SID) {
-            try {
-                // Use Twilio Verify with custom code template
-                await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
-                    .verifications
-                    .create({
-                        to: email.toLowerCase(),
-                        channel: 'email',
-                        customCode: resetCode  // Send our 3-digit code
-                    });
-                console.log(`📧 Password reset code sent to: ${email}`);
-            } catch (twilioError) {
-                console.error('Twilio reset email error:', twilioError.message);
-                // Continue anyway - code is saved in DB
-            }
-        } else {
-            console.log(`🔐 Password reset code for ${email}: ${resetCode} (Twilio not configured)`);
-        }
+        // TODO: Send email with resetCode
+        console.log(`🔐 Password reset code for ${email}: ${resetCode}`);
 
-        res.json({
+        const response = {
             success: true,
             message: successMessage
-        });
+        };
+
+        if (process.env.NODE_ENV === 'development') {
+            response.resetCode = resetCode;
+            response._devNote = 'Reset code only shown in development mode';
+        }
+
+        res.json(response);
 
     } catch (error) {
         console.error('Password reset request error:', error);

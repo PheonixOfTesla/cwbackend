@@ -23,6 +23,9 @@ router.post('/resend-verification', authController.resendVerification);
 // Request password reset (sends reset code)
 router.post('/reset-password', authController.resetPasswordRequest);
 
+// Debug: Check Twilio status
+router.get('/twilio-status', authController.twilioStatus);
+
 // Reset password with code
 router.put('/reset-password/:resetToken', authController.resetPassword);
 
