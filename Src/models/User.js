@@ -263,6 +263,17 @@ const userSchema = new mongoose.Schema({
     skippedSteps: [Number]
   },
 
+  // Personal Records (PRs)
+  personalRecords: [{
+    exerciseName: { type: String, required: true },
+    exerciseId: String,
+    weight: { type: Number, required: true },
+    reps: { type: Number, required: true },
+    oneRepMax: Number, // Estimated 1RM using Brzycki formula
+    date: { type: Date, default: Date.now },
+    notes: String
+  }],
+
   // Elite Mode Settings
   eliteMode: {
     enabled: {

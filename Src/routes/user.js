@@ -65,6 +65,12 @@ router.post('/assign-client', protect, checkRole('admin', 'owner', 'specialist')
 router.post('/unassign-client', protect, checkRole('admin', 'owner', 'specialist'), userController.unassignClientFromSpecialist);
 
 // ============================================
+// PERSONAL RECORDS (PRs)
+// ============================================
+router.get('/prs', protect, userController.getPersonalRecords);
+router.post('/prs', protect, userController.updatePersonalRecords);
+
+// ============================================
 // INDIVIDUAL USER MANAGEMENT
 // ============================================
 router.get('/:id', protect, userController.getProfile);

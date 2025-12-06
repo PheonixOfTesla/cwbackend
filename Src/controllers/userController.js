@@ -537,4 +537,112 @@ exports.unassignClientFromSpecialist = async (req, res) => {
   }
 };
 
+// ============================================
+// PERSONAL RECORDS (PRs)
+// ============================================
+
+/**
+ * Calculate estimated 1RM using Brzycki formula
+ */
+const calculate1RM = (weight, reps) => {
+  if (reps <= 0 || weight <= 0) return 0;
+  if (reps === 1) return weight;
+  return Math.round(weight / (1.0278 - 0.0278 * reps));
+};
+
+/**
+ * GET /api/users/prs
+ * Get current user's personal records
+ */
+exports.getPersonalRecords = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('personalRecords');
+
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    return successResponse(res, {
+      personalRecords: user.personalRecords || []
+    });
+
+  } catch (error) {
+    console.error('Get PRs error:', error);
+    return errorResponse(res, 'Failed to fetch personal records', 500, error);
+  }
+};
+
+/**
+ * POST /api/users/prs
+ * Update personal records (add new PRs from workout)
+ */
+exports.updatePersonalRecords = async (req, res) => {
+  try {
+    const { newPRs } = req.body;
+
+    if (!newPRs || !Array.isArray(newPRs) || newPRs.length === 0) {
+      return errorResponse(res, 'newPRs array is required', 400);
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    // Initialize personalRecords if empty
+    if (!user.personalRecords) {
+      user.personalRecords = [];
+    }
+
+    const addedPRs = [];
+
+    for (const pr of newPRs) {
+      if (!pr.exerciseName || !pr.weight || !pr.reps) continue;
+
+      const oneRepMax = calculate1RM(pr.weight, pr.reps);
+
+      // Find existing PR for this exercise
+      const existingIndex = user.personalRecords.findIndex(
+        p => p.exerciseName.toLowerCase() === pr.exerciseName.toLowerCase()
+      );
+
+      const newPR = {
+        exerciseName: pr.exerciseName,
+        exerciseId: pr.exerciseId || null,
+        weight: pr.weight,
+        reps: pr.reps,
+        oneRepMax,
+        date: new Date(),
+        notes: pr.notes || null
+      };
+
+      if (existingIndex >= 0) {
+        // Update if new 1RM is higher
+        const existing = user.personalRecords[existingIndex];
+        if (oneRepMax > (existing.oneRepMax || 0)) {
+          user.personalRecords[existingIndex] = newPR;
+          addedPRs.push(newPR);
+        }
+      } else {
+        // Add new PR
+        user.personalRecords.push(newPR);
+        addedPRs.push(newPR);
+      }
+    }
+
+    await user.save();
+
+    console.log(`🏆 ${addedPRs.length} new PRs saved for user ${user.email}`);
+
+    return successResponse(res, {
+      addedPRs,
+      totalPRs: user.personalRecords.length
+    }, `${addedPRs.length} personal record(s) updated`);
+
+  } catch (error) {
+    console.error('Update PRs error:', error);
+    return errorResponse(res, 'Failed to update personal records', 500, error);
+  }
+};
+
 module.exports = exports;
