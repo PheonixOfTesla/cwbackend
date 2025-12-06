@@ -1,12 +1,13 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const Goal = require('../models/Goal');
 const Workout = require('../models/Workout');
 const CalendarEvent = require('../models/CalendarEvent');
 
-// Initialize Google AI
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+// Initialize Anthropic (Claude) - primary AI provider
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 
 /**
  * Get today's check-in (or pre-filled template)
@@ -301,7 +302,7 @@ async function getLatestWearableData(userId) {
  * Generate AI training recommendation based on check-in
  */
 async function generateTrainingRecommendation(checkIn, userId) {
-  if (!process.env.GOOGLE_AI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return generateRuleBasedRecommendation(checkIn);
   }
 
@@ -317,14 +318,6 @@ async function generateTrainingRecommendation(checkIn, userId) {
       date: { $gte: today, $lt: tomorrow },
       type: 'workout'
     }).populate('workoutId');
-
-    const model = genAI.getGenerativeModel({
-      model: 'models/gemini-2.5-pro',
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 512
-      }
-    });
 
     const prompt = `Based on this athlete's check-in data, provide a training intensity recommendation.
 
@@ -351,9 +344,12 @@ Return ONLY valid JSON:
   "nutritionTip": "One specific nutrition tip for today"
 }`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiText = response.text();
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 512,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const aiText = message.content[0].text;
 
     // Parse JSON
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);

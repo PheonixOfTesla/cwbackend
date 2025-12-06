@@ -1,10 +1,11 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 const User = require('../models/User');
 const CalendarEvent = require('../models/CalendarEvent');
 const Goal = require('../models/Goal');
 
-// Initialize Google AI
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+// Initialize Anthropic (Claude) - primary AI provider
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 
 // Step field mappings
 const STEP_FIELDS = {
@@ -406,26 +407,21 @@ exports.generateProgram = async (req, res) => {
  * Generate initial program using AI
  */
 async function generateInitialProgram(user) {
-  if (!process.env.GOOGLE_AI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     console.log('No AI API key - generating fallback program');
     return generateFallbackProgram(user);
   }
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: 'models/gemini-2.5-pro',
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096
-      }
-    });
-
     const prompt = buildInitialProgramPrompt(user);
-    console.log('🤖 Generating initial training program...');
+    console.log('🤖 Generating initial training program with Claude...');
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiText = response.text();
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const aiText = message.content[0].text;
 
     // Parse JSON from response
     const jsonMatch = aiText.match(/```(?:json)?\s*([\s\S]*?)```/) ||

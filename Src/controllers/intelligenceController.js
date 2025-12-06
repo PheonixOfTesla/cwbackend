@@ -1,5 +1,5 @@
 // Src/controllers/intelligenceController.js
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 const WearableData = require('../models/WearableData');
 const Workout = require('../models/Workout');
 const Measurement = require('../models/Measurement');
@@ -7,14 +7,15 @@ const Nutrition = require('../models/Nutrition');
 const Goal = require('../models/Goal');
 const { getLatestCompleteData } = require('./wearableController');
 
-// Initialize Google AI with Gemini 2.5 Pro
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+// Initialize Anthropic (Claude) - primary AI provider
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 
 /**
- * ✅ CLOCKWORK ELITE INTELLIGENCE ENGINE - COMPLETE FIXED VERSION
- * - Fixed AI model: gemini-2.5-pro-latest (BEST)
- * - Fixed data fetching: Smart fallback from history
- * - Fixed insights: Always returns data
+ * ✅ CLOCKWORK ELITE INTELLIGENCE ENGINE
+ * - AI model: Claude 3.5 Haiku (Anthropic)
+ * - Smart data fetching with fallback from history
+ * - Always returns insights
  */
 exports.getHealthMetrics = async (req, res) => {
   try {
@@ -162,20 +163,10 @@ exports.getHealthMetrics = async (req, res) => {
                        nutritionAnalysis.score > 0 ||
                        goalAnalysis.score > 0;
     
-    if (process.env.GOOGLE_AI_API_KEY && hasAnyData) {
+    if (process.env.ANTHROPIC_API_KEY && hasAnyData) {
       try {
-        console.log('🤖 Generating Elite AI Coaching with Gemini 2.5 Pro...');
-        
-        const model = genAI.getGenerativeModel({ 
-          model: 'models/gemini-2.5-pro',  // ✅ EXACT model name from your API
-          generationConfig: {
-            temperature: 0.7,
-            topK: 64,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          }
-        });
-        
+        console.log('🤖 Generating Elite AI Coaching with Claude 3.5 Haiku...');
+
         const prompt = buildEliteCoachingPrompt(
           recoveryAnalysis,
           trainingAnalysis,
@@ -185,29 +176,32 @@ exports.getHealthMetrics = async (req, res) => {
           last7DaysWorkouts,
           activeGoals
         );
-        
-        console.log('📤 Sending prompt to Gemini 2.5 Pro...');
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        aiInsights = response.text();
-        
+
+        console.log('📤 Sending prompt to Claude...');
+        const message = await anthropic.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }]
+        });
+        aiInsights = message.content[0].text;
+
         console.log('✅ Elite AI Coaching Generated Successfully');
         console.log(`📊 AI Response Length: ${aiInsights.length} characters`);
       } catch (aiError) {
         console.error('⚠️ AI Generation Error:', aiError.message);
         console.error('Full AI Error:', aiError);
-        
+
         // Fallback with detailed error info
         aiInsights = generateEliteFallbackInsights(
-          clockworkScores, 
-          trainingAnalysis, 
+          clockworkScores,
+          trainingAnalysis,
           recoveryAnalysis,
           `AI temporarily unavailable (${aiError.message})`
         );
       }
     } else {
-      if (!process.env.GOOGLE_AI_API_KEY) {
-        console.log('⚠️ GOOGLE_AI_API_KEY not set - using rule-based insights');
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.log('⚠️ ANTHROPIC_API_KEY not set - using rule-based insights');
       } else {
         console.log('⚠️ Insufficient data for AI analysis');
       }

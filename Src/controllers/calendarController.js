@@ -1,12 +1,13 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 const CalendarEvent = require('../models/CalendarEvent');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const User = require('../models/User');
 const Workout = require('../models/Workout');
 
-// Initialize Google AI with Gemini 2.5 Pro
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+// Initialize Anthropic (Claude) - primary AI provider
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 
 /**
  * Get calendar events for a date range
@@ -291,28 +292,21 @@ exports.generateWeek = async (req, res) => {
     // Build AI prompt
     const prompt = buildWeeklyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate);
 
-    // Generate with Gemini
-    if (!process.env.GOOGLE_AI_API_KEY) {
+    // Generate with Claude (Anthropic)
+    if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(400).json({
         success: false,
         message: 'AI API key not configured'
       });
     }
 
-    const model = genAI.getGenerativeModel({
-      model: 'models/gemini-2.5-pro',
-      generationConfig: {
-        temperature: 0.7,
-        topK: 64,
-        topP: 0.95,
-        maxOutputTokens: 4096
-      }
+    console.log('🔨 FORGE generating weekly training plan...');
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
     });
-
-    console.log('🤖 Generating weekly training plan...');
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiText = response.text();
+    const aiText = message.content[0].text;
 
     // Parse JSON from AI response
     let plan;
@@ -524,28 +518,21 @@ exports.generateMonth = async (req, res) => {
     // Build AI prompt for monthly plan
     const prompt = buildMonthlyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate);
 
-    // Generate with Gemini
-    if (!process.env.GOOGLE_AI_API_KEY) {
+    // Generate with Claude (Anthropic)
+    if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(400).json({
         success: false,
         message: 'AI API key not configured'
       });
     }
 
-    const model = genAI.getGenerativeModel({
-      model: 'models/gemini-2.5-pro',
-      generationConfig: {
-        temperature: 0.7,
-        topK: 64,
-        topP: 0.95,
-        maxOutputTokens: 8192
-      }
-    });
-
     console.log('🔥 FORGE generating monthly training program...');
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiText = response.text();
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8192,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const aiText = message.content[0].text;
 
     // Parse JSON from AI response
     let plan;

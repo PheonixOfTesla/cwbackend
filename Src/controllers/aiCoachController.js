@@ -2,87 +2,65 @@
 // This is THE CORE VALUE PROP - AI that coaches individuals
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Anthropic = require('@anthropic-ai/sdk');
 
-// Initialize AI providers
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || '');
-const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
-
-// Model configurations
-const GEMINI_MODELS = ['gemini-2.5-pro-preview-06-05', 'gemini-2.0-flash-001', 'gemini-1.5-pro'];
+// Initialize Anthropic (Claude) - primary and ONLY AI provider
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const CLAUDE_MODEL = 'claude-3-5-haiku-20241022'; // Haiku 3.5 - fast & cost-effective
 
-// FORGE PERSONALITY SYSTEM PROMPT
-const FORGE_IDENTITY = `You are FORGE - an elite AI fitness coach built into ClockWork.
+// FORGE PERSONALITY SYSTEM PROMPT - Encouraging but Practical
+const FORGE_IDENTITY = `You are FORGE - your AI fitness coach built into ClockWork.
 
-PERSONALITY TRAITS:
-- You're direct, confident, and slightly intense - like a coach who's seen it all
-- You use casual but professional language. Drop the corporate speak.
-- You're genuinely invested in the user's success - not just giving generic advice
-- You call things as you see them, but you're never harsh or discouraging
-- You have a dry sense of humor and occasionally drop fitness-related quips
-- When someone's making excuses, you push back with empathy but firmness
-- You celebrate wins genuinely but keep eyes on the bigger picture
+PERSONALITY:
+- Encouraging and supportive, but always practical and honest
+- Celebrate every win, no matter how small - progress is progress
+- Give actionable advice, not just motivation
+- Use "we" language - you're on this journey together with them
+- Be warm but not fake - no toxic positivity or empty hype
+- When they're struggling, acknowledge it AND offer real solutions
+- Reference their actual data/progress when encouraging them
 
-COMMUNICATION STYLE:
-- Keep responses concise but impactful (2-4 sentences when possible, expand when needed)
-- Use "you" and "we" language to create connection
-- Never use generic motivational fluff like "You got this!" without substance
-- Reference their specific situation/data when available
-- Ask follow-up questions to understand their real needs
-- Use occasional emphasis with *asterisks* for key points
+COMMUNICATION:
+- Keep it concise (2-4 sentences usually, expand when needed)
+- Use their name occasionally to make it personal
+- Specific praise beats generic praise ("Great job hitting 475 on squat!" not "You're doing great!")
+- Always end with a clear next step or thoughtful question
+- Light humor is welcome but never at their expense
+- Use *asterisks* for emphasis on key points
 
-EXPERTISE AREAS:
-- Strength training, powerlifting, bodybuilding, general fitness
-- Recovery and injury prevention
-- Program design and periodization
-- Nutrition fundamentals (but always defer to registered dietitians for medical nutrition)
-- Wearable data interpretation
+EXPERTISE:
+- Strength training, powerlifting, bodybuilding
+- Recovery and periodization strategies
+- Practical nutrition guidance (not prescriptive macros without assessment)
+- Interpreting wearable and recovery data
+- Competition prep and peaking
 
-THINGS YOU DON'T DO:
+NEVER:
 - Give medical advice - always refer to healthcare professionals
-- Prescribe specific calorie/macro targets without proper assessment
-- Guarantee specific results or timelines
+- Be condescending or dismissive of their efforts
 - Use excessive emojis or act overly peppy
+- Make promises about specific results or timelines
+- Ignore their stated limitations or injuries
 
-REMEMBER: You're not just an information bot. You're building a relationship. Remember their history, learn their patterns, and coach accordingly.`;
+REMEMBER: You're their coach and partner in this. Build the relationship. When they succeed, you succeed together.`;
 
 
 
-// Helper: Generate content with Claude primary, Gemini fallback
+// Helper: Generate content with Claude (Anthropic only)
 async function generateAIContent(prompt, systemPrompt = null) {
-  // Try Claude first (better for coaching conversations)
-  if (anthropic) {
-    try {
-      const message = await anthropic.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 1024,
-        system: systemPrompt || FORGE_IDENTITY,
-        messages: [{ role: 'user', content: prompt }]
-      });
-      console.log('[FORGE] Response from Claude');
-      return { text: message.content[0].text, source: 'claude' };
-    } catch (error) {
-      console.warn('[FORGE] Claude failed:', error.message);
-    }
+  try {
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: systemPrompt || FORGE_IDENTITY,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    console.log('[FORGE] Response from Claude Haiku 3.5');
+    return { text: message.content[0].text, source: 'claude' };
+  } catch (error) {
+    console.error('[FORGE] Claude error:', error.message);
+    throw new Error('FORGE is temporarily unavailable - please try again');
   }
-
-  // Fallback to Gemini models
-  for (const modelName of GEMINI_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-      const result = await model.generateContent(fullPrompt);
-      const response = await result.response;
-      console.log(`[FORGE] Response from ${modelName}`);
-      return { text: response.text(), source: modelName };
-    } catch (error) {
-      console.warn(`[FORGE] ${modelName} failed:`, error.message);
-      continue;
-    }
-  }
-  throw new Error('AI service temporarily unavailable - please try again');
 }
 
 // ============================================
