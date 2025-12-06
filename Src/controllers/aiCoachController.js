@@ -3,45 +3,28 @@
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const OpenAI = require('openai');
 
-// Initialize AI providers with fallback
+// Initialize Gemini (same as pal-backend)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Model configurations with fallback chain
-const MODELS = {
-  gemini: ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro'],
-  openai: 'gpt-4o-mini' // Cheap, fast, good for coaching
-};
+// Model configurations - same as pal-backend consciousMind.js
+const GEMINI_MODELS = ['gemini-3-pro-preview', 'gemini-2.0-flash-exp'];
 
-// Helper: Generate content with automatic fallback
+// Helper: Generate content with Gemini fallback
 async function generateAIContent(prompt) {
-  // Try Gemini models first
-  for (const modelName of MODELS.gemini) {
+  for (const modelName of GEMINI_MODELS) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      return { text: response.text(), source: `gemini-${modelName}` };
+      console.log(`[AI Coach] Response from ${modelName}`);
+      return { text: response.text(), source: modelName };
     } catch (error) {
       console.warn(`[AI Coach] ${modelName} failed:`, error.message);
-      continue; // Try next model
+      continue;
     }
   }
-
-  // Fallback to OpenAI
-  try {
-    const completion = await openai.chat.completions.create({
-      model: MODELS.openai,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000
-    });
-    return { text: completion.choices[0].message.content, source: 'openai' };
-  } catch (error) {
-    console.error('[AI Coach] All AI providers failed:', error);
-    throw new Error('AI services temporarily unavailable. Please try again.');
-  }
+  throw new Error('AI service temporarily unavailable');
 }
 
 // ============================================
