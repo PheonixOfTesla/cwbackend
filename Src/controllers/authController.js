@@ -4,6 +4,7 @@ const AICoach = require('../models/AICoach');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { sendVerificationCode, sendPasswordResetCode } = require('../utils/email');
 
 // Twilio Verify for email verification (with validation)
 const twilio = require('twilio');
@@ -469,26 +470,10 @@ exports.resetPasswordRequest = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
         await user.save();
 
-        // Try Twilio Verify first, fall back to logging code
-        let emailSent = false;
-        if (twilioClient && VERIFY_SERVICE_SID) {
-            try {
-                await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
-                    .verifications
-                    .create({
-                        to: email.toLowerCase(),
-                        channel: 'email'
-                    });
-                console.log(`📧 Password reset code sent via Twilio to: ${email}`);
-                emailSent = true;
-            } catch (twilioError) {
-                console.error('Twilio reset email error:', twilioError.message);
-                // Fall through to DB code
-            }
-        }
-
+        // Send password reset email via Nodemailer
+        const emailSent = await sendPasswordResetCode(email.toLowerCase(), resetCode);
         if (!emailSent) {
-            // Log code for debugging (in production, would send via another email service)
+            // Log code for debugging if email not configured
             console.log(`🔐 Password reset code for ${email}: ${resetCode}`);
         }
 
@@ -548,36 +533,8 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        // Try Twilio verification first, then fall back to DB code
-        let verified = false;
-
-        if (twilioClient && VERIFY_SERVICE_SID) {
-            try {
-                const verification = await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
-                    .verificationChecks
-                    .create({ to: email.toLowerCase(), code: resetToken });
-
-                if (verification.status === 'approved') {
-                    verified = true;
-                }
-            } catch (twilioError) {
-                console.error('Twilio verification check error:', twilioError.message);
-                // Fall through to DB code check
-            }
-        }
-
-        // If Twilio didn't verify, check DB code
-        if (!verified) {
-            if (user.resetPasswordCode !== resetToken) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid or expired reset code'
-                });
-            }
-            verified = true;
-        }
-
-        if (!verified) {
+        // Verify the reset code against DB
+        if (user.resetPasswordCode !== resetToken) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid or expired reset code'
