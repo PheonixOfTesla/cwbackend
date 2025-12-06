@@ -40,12 +40,17 @@ exports.register = async (req, res) => {
         // Determine user type and subscription tier
         const finalUserType = userType || 'individual';
         let subscriptionTier = 'free';
+        let subscriptionStatus = 'trialing'; // Start everyone on trial
 
         if (finalUserType === 'coach') {
             subscriptionTier = 'coach_starter'; // Coaches start with starter tier
         }
 
-        // Create user with new B2C/B2B model
+        // Calculate trial period (24 hours from now)
+        const trialStartDate = new Date();
+        const trialEndDate = new Date(trialStartDate.getTime() + (24 * 60 * 60 * 1000)); // 24 hours
+
+        // Create user with new B2C/B2B model + 24-hour trial
         const user = new User({
             name,
             email: email.toLowerCase(),
@@ -53,7 +58,10 @@ exports.register = async (req, res) => {
             userType: finalUserType,
             subscription: {
                 tier: subscriptionTier,
-                status: 'active'
+                status: subscriptionStatus,
+                trialStartDate,
+                trialEndDate,
+                trialUsed: true
             }
         });
 
@@ -71,18 +79,22 @@ exports.register = async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        console.log(`✅ New ${finalUserType} registered: ${email}`);
+        console.log(`✅ New ${finalUserType} registered with 24h trial: ${email}`);
 
         res.status(201).json({
             success: true,
-            message: 'User registered successfully',
+            message: 'Welcome! Your 24-hour Pro trial has started.',
             token,
             user: {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
                 userType: user.userType,
-                subscription: user.subscription,
+                subscription: {
+                    ...user.subscription.toObject(),
+                    isTrialActive: true,
+                    trialHoursRemaining: 24
+                },
                 onboarding: user.onboarding
             }
         });
@@ -131,6 +143,12 @@ exports.login = async (req, res) => {
             });
         }
 
+        // Check and expire trial if needed
+        const trialExpired = await user.checkTrialExpiration();
+        if (trialExpired) {
+            console.log(`⏰ Trial expired for: ${email}`);
+        }
+
         // Update last login
         user.lastLogin = new Date();
         await user.save();
@@ -142,7 +160,11 @@ exports.login = async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        console.log(`✅ Login successful for ${user.userType}: ${email}`);
+        // Get trial status
+        const isTrialActive = user.isTrialActive();
+        const trialHoursRemaining = user.getTrialRemainingHours();
+
+        console.log(`✅ Login successful for ${user.userType}: ${email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
 
         res.json({
             success: true,
@@ -153,7 +175,11 @@ exports.login = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 userType: user.userType,
-                subscription: user.subscription,
+                subscription: {
+                    ...user.subscription.toObject(),
+                    isTrialActive,
+                    trialHoursRemaining
+                },
                 onboarding: user.onboarding,
                 coachId: user.coachId
             }
