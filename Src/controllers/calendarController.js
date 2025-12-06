@@ -611,18 +611,27 @@ exports.generateMonth = async (req, res) => {
         // IMPORTANT: Normalize the type to valid enum values
         const normalizedType = normalizeEventType(day.type);
 
+        // Map exercises to proper format with sets, reps, rest
+        const exercisesList = (day.exercises || []).map(ex => ({
+          name: ex.name || ex.exercise,
+          sets: ex.sets || 3,
+          reps: ex.reps || '8-12',
+          rest: ex.rest || '90s',
+          notes: ex.notes || ''
+        }));
+
         const eventData = {
           userId,
           type: normalizedType,
           title: day.workoutName || day.title || `${normalizedType === 'rest-day' ? 'Rest' : 'Workout'} Day`,
-          description: day.description || (day.exercises ? day.exercises.map(e => `${e.name}: ${e.sets}x${e.reps}`).join(', ') : ''),
+          description: day.description || (exercisesList.length > 0 ? exercisesList.map(e => `${e.name}: ${e.sets}×${e.reps}`).join('\n') : ''),
+          exercises: exercisesList,
           date: eventDate,
           startTime: day.startTime || user.schedule?.preferredTime || '09:00',
           duration: day.duration || user.schedule?.sessionDuration || 60,
           aiGenerated: true,
           aiReason: `Week ${weekIndex + 1}: ${week.focus || 'FORGE-generated program'}`,
-          status: 'scheduled',
-          workoutDetails: day.exercises || []
+          status: 'scheduled'
         };
 
         events.push(eventData);

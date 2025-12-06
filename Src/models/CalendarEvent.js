@@ -31,6 +31,16 @@ const calendarEventSchema = new mongoose.Schema({
   // Link to actual workout if type is 'workout'
   workoutId: { type: mongoose.Schema.Types.ObjectId, ref: 'Workout' },
 
+  // Workout exercises (for inline display without needing to load Workout)
+  exercises: [{
+    name: String,
+    sets: Number,
+    reps: String,
+    rest: String,
+    weight: Number,
+    notes: String
+  }],
+
   // Event Details
   title: { type: String, required: true, trim: true },
   description: { type: String, trim: true },
