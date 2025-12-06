@@ -7,8 +7,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Initialize Gemini (same as pal-backend)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Model configurations - Gemini 2.0 (works with Gemini API keys)
-const GEMINI_MODELS = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-exp-1206'];
+// Model configurations - Gemini 3
+const GEMINI_MODELS = ['gemini-3-pro-preview'];
 
 // Helper: Generate content with Gemini fallback
 async function generateAIContent(prompt) {
