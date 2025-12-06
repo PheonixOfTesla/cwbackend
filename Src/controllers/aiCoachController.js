@@ -46,18 +46,34 @@ REMEMBER: You're their coach and partner in this. Build the relationship. When t
 
 
 
-// Helper: Generate content with Claude (Anthropic only)
+// Helper: Generate content with Claude (Anthropic only) + 30s timeout
+const AI_TIMEOUT_MS = 30000; // 30 seconds
+
 async function generateAIContent(prompt, systemPrompt = null) {
   try {
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt || FORGE_IDENTITY,
-      messages: [{ role: 'user', content: prompt }]
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('AI_TIMEOUT')), AI_TIMEOUT_MS);
     });
+
+    // Race between API call and timeout
+    const message = await Promise.race([
+      anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt || FORGE_IDENTITY,
+        messages: [{ role: 'user', content: prompt }]
+      }),
+      timeoutPromise
+    ]);
+
     console.log('[FORGE] Response from Claude Haiku 3.5');
     return { text: message.content[0].text, source: 'claude' };
   } catch (error) {
+    if (error.message === 'AI_TIMEOUT') {
+      console.error('[FORGE] Claude timeout after 30s');
+      throw new Error('FORGE is taking too long - please try again');
+    }
     console.error('[FORGE] Claude error:', error.message);
     throw new Error('FORGE is temporarily unavailable - please try again');
   }

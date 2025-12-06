@@ -34,7 +34,9 @@ const corsOptions = {
             'http://localhost:5173',
             'http://localhost:8080',
             'https://clockwork.fit',
+            'https://www.clockwork.fit',
             'https://theclockworkhub.com',
+            'https://www.theclockworkhub.com',
             'https://coastalfitnesshub.com',
             /\.vercel\.app$/,
             /\.netlify\.app$/,
@@ -82,8 +84,8 @@ const connectDB = async () => {
         const options = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
+            serverSelectionTimeoutMS: 15000,  // Increased from 5s to 15s
+            socketTimeoutMS: 60000,           // Increased from 45s to 60s
             maxPoolSize: 50,
             minPoolSize: 10,
             maxIdleTimeMS: 30000,
