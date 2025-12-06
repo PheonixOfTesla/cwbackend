@@ -188,19 +188,15 @@ exports.generateMealPlan = async (req, res) => {
     const user = await User.findById(userId);
     let nutrition = await Nutrition.getOrCreateForUser(userId);
 
-    // Ensure targets are calculated
+    // Ensure targets are calculated (use defaults if profile incomplete)
     if (!nutrition.targets?.calories) {
-      if (!user?.profile?.currentWeight) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please complete your profile first'
-        });
-      }
       nutrition.targets = calculateTDEE(
-        user.profile,
+        user?.profile || {},
         nutrition.activityLevel || 'moderate',
         nutrition.nutritionGoal || 'maintain'
       );
+      await nutrition.save();
+      console.log(`🍽️ Auto-calculated nutrition targets for meal plan: ${nutrition.targets.calories} cal`);
     }
 
     const { calories, protein, carbs, fat } = nutrition.targets;
