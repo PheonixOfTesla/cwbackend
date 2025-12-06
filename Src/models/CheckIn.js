@@ -73,6 +73,11 @@ const checkInSchema = new mongoose.Schema({
   },
 
   // ═══════════════════════════════════════
+  // PROGRESS PHOTO
+  // ═══════════════════════════════════════
+  progressPhoto: { type: String },  // Base64 or URL
+
+  // ═══════════════════════════════════════
   // AI RECOMMENDATION
   // ═══════════════════════════════════════
   aiRecommendation: {
