@@ -8,11 +8,24 @@ const calendarEventSchema = new mongoose.Schema({
     index: true
   },
 
-  // Event Type (training-focused only)
+  // Event Type
   type: {
     type: String,
-    enum: ['workout', 'rest-day', 'deload', 'competition', 'weigh-in', 'check-in', 'cardio'],
+    enum: ['workout', 'rest-day', 'deload', 'competition', 'weigh-in', 'check-in', 'cardio', 'nutrition'],
     required: true
+  },
+
+  // Nutrition meal data (for type='nutrition')
+  mealData: {
+    mealType: { type: String, enum: ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'] },
+    name: String,
+    calories: Number,
+    protein: Number,
+    carbs: Number,
+    fat: Number,
+    ingredients: [String],
+    prepTime: Number,
+    imageUrl: String
   },
 
   // Link to actual workout if type is 'workout'
@@ -135,7 +148,8 @@ calendarEventSchema.methods.getDisplayColor = function() {
     'competition': '#ef4444', // Red
     'weigh-in': '#8b5cf6',    // Purple
     'check-in': '#06b6d4',    // Cyan
-    'cardio': '#ec4899'       // Pink
+    'cardio': '#ec4899',      // Pink
+    'nutrition': '#22c55e'    // Green (food)
   };
   return this.color || colors[this.type] || '#6b7280';
 };
