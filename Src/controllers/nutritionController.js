@@ -16,25 +16,35 @@ const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 // ============================================
 
 function calculateTDEE(profile, activityLevel, goal) {
-  const { currentWeight, height, dateOfBirth, gender } = profile;
+  const { currentWeight, height, dateOfBirth, gender } = profile || {};
+
+  // Use sensible defaults if profile data is missing
+  const defaultWeight = 170; // lbs
+  const defaultHeight = 68;  // inches (5'8")
+  const defaultAge = 30;
+  const defaultGender = 'male';
 
   // Convert units if needed (assume imperial, convert to metric for calculation)
-  const weightKg = currentWeight * 0.453592; // lbs to kg
-  const heightCm = height * 2.54; // inches to cm
+  const weightKg = (currentWeight || defaultWeight) * 0.453592; // lbs to kg
+  const heightCm = (height || defaultHeight) * 2.54; // inches to cm
+  const userGender = gender || defaultGender;
 
   // Calculate age
-  const today = new Date();
-  const birthDate = new Date(dateOfBirth);
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
+  let age = defaultAge;
+  if (dateOfBirth) {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    if (isNaN(age) || age < 10 || age > 100) age = defaultAge;
   }
-  age = age || 25; // Default age if not provided
 
   // Mifflin-St Jeor Equation for BMR
   let bmr;
-  if (gender === 'male') {
+  if (userGender === 'male') {
     bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
   } else {
     bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
@@ -132,22 +142,15 @@ exports.calculateTargets = async (req, res) => {
     const { activityLevel, nutritionGoal } = req.body;
 
     const user = await User.findById(userId);
-    if (!user?.profile?.currentWeight) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please complete your profile with weight and height first'
-      });
-    }
-
     let nutrition = await Nutrition.getOrCreateForUser(userId);
 
     // Update settings
     if (activityLevel) nutrition.activityLevel = activityLevel;
     if (nutritionGoal) nutrition.nutritionGoal = nutritionGoal;
 
-    // Calculate new targets
+    // Calculate new targets (uses defaults if profile incomplete)
     const targets = calculateTDEE(
-      user.profile,
+      user?.profile || {},
       nutrition.activityLevel,
       nutrition.nutritionGoal
     );
@@ -155,16 +158,19 @@ exports.calculateTargets = async (req, res) => {
     nutrition.targets = targets;
     await nutrition.save();
 
-    console.log(`🍽️ Calculated nutrition targets for ${user.name}: ${targets.calories} cal`);
+    // Note if using defaults
+    const usingDefaults = !user?.profile?.currentWeight;
+    console.log(`🍽️ Calculated nutrition targets for ${user?.name || 'user'}: ${targets.calories} cal${usingDefaults ? ' (using defaults)' : ''}`);
 
     res.json({
       success: true,
-      message: 'Nutrition targets calculated',
-      data: {
-        targets,
-        activityLevel: nutrition.activityLevel,
-        nutritionGoal: nutrition.nutritionGoal
-      }
+      message: usingDefaults
+        ? 'Targets calculated using default values. Update your profile for personalized results.'
+        : 'Nutrition targets calculated',
+      targets,
+      activityLevel: nutrition.activityLevel,
+      nutritionGoal: nutrition.nutritionGoal,
+      usingDefaults
     });
   } catch (error) {
     console.error('Calculate targets error:', error);
