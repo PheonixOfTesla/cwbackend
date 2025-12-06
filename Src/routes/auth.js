@@ -14,6 +14,12 @@ router.post('/register', authController.register);
 // Login existing user
 router.post('/login', authController.login);
 
+// Verify login code (2FA via email)
+router.post('/verify-login', authController.verifyLogin);
+
+// Resend verification code
+router.post('/resend-verification', authController.resendVerification);
+
 // Request password reset (sends reset code)
 router.post('/reset-password', authController.resetPasswordRequest);
 

@@ -5,6 +5,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
+// Twilio Verify for email verification
+const twilio = require('twilio');
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null;
+const VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE;
+
 // ============================================
 // REGISTER (Updated for userType)
 // ============================================
@@ -110,7 +117,7 @@ exports.register = async (req, res) => {
 };
 
 // ============================================
-// LOGIN (Updated for userType)
+// LOGIN (With Email Verification via Twilio)
 // ============================================
 exports.login = async (req, res) => {
     try {
@@ -143,47 +150,37 @@ exports.login = async (req, res) => {
             });
         }
 
-        // Check and expire trial if needed
-        const trialExpired = await user.checkTrialExpiration();
-        if (trialExpired) {
-            console.log(`⏰ Trial expired for: ${email}`);
+        // If Twilio Verify is configured, send verification code
+        if (twilioClient && VERIFY_SERVICE_SID) {
+            try {
+                await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                    .verifications
+                    .create({ to: email.toLowerCase(), channel: 'email' });
+
+                console.log(`📧 Verification code sent to: ${email}`);
+
+                // Create a temporary token that can only be used for verification
+                const pendingToken = jwt.sign(
+                    { id: user._id, pending: true },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '10m' } // 10 minutes to verify
+                );
+
+                return res.json({
+                    success: true,
+                    requiresVerification: true,
+                    message: 'Verification code sent to your email',
+                    pendingToken,
+                    email: email.toLowerCase()
+                });
+            } catch (twilioError) {
+                console.error('Twilio verification error:', twilioError.message);
+                // Fall through to regular login if Twilio fails
+            }
         }
 
-        // Update last login
-        user.lastLogin = new Date();
-        await user.save();
-
-        // Generate token with userType
-        const token = jwt.sign(
-            { id: user._id, userType: user.userType },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
-
-        // Get trial status
-        const isTrialActive = user.isTrialActive();
-        const trialHoursRemaining = user.getTrialRemainingHours();
-
-        console.log(`✅ Login successful for ${user.userType}: ${email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
-
-        res.json({
-            success: true,
-            message: 'Login successful',
-            token,
-            user: {
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                userType: user.userType,
-                subscription: {
-                    ...user.subscription.toObject(),
-                    isTrialActive,
-                    trialHoursRemaining
-                },
-                onboarding: user.onboarding,
-                coachId: user.coachId
-            }
-        });
+        // Regular login (no verification or Twilio failed)
+        return completeLogin(user, res);
 
     } catch (error) {
         console.error('Login error:', error);
@@ -194,6 +191,207 @@ exports.login = async (req, res) => {
         });
     }
 };
+
+// ============================================
+// VERIFY LOGIN CODE (Twilio Verify)
+// ============================================
+exports.verifyLogin = async (req, res) => {
+    try {
+        const { pendingToken, code } = req.body;
+
+        if (!pendingToken || !code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Pending token and verification code are required'
+            });
+        }
+
+        // Verify the pending token
+        let decoded;
+        try {
+            decoded = jwt.verify(pendingToken, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                success: false,
+                message: 'Verification expired. Please login again.'
+            });
+        }
+
+        if (!decoded.pending) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid token type'
+            });
+        }
+
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Verify the code with Twilio
+        if (!twilioClient || !VERIFY_SERVICE_SID) {
+            return res.status(500).json({
+                success: false,
+                message: 'Verification service not configured'
+            });
+        }
+
+        try {
+            const verification = await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                .verificationChecks
+                .create({ to: user.email, code: code });
+
+            if (verification.status !== 'approved') {
+                console.log(`❌ Invalid verification code for: ${user.email}`);
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid verification code'
+                });
+            }
+        } catch (twilioError) {
+            console.error('Twilio check error:', twilioError.message);
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid or expired verification code'
+            });
+        }
+
+        console.log(`✅ Email verified for: ${user.email}`);
+
+        // Mark email as verified if not already
+        if (!user.emailVerified) {
+            user.emailVerified = true;
+        }
+
+        // Complete the login
+        return completeLogin(user, res);
+
+    } catch (error) {
+        console.error('Verify login error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error during verification'
+        });
+    }
+};
+
+// ============================================
+// RESEND VERIFICATION CODE
+// ============================================
+exports.resendVerification = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            // Don't reveal if user exists
+            return res.json({
+                success: true,
+                message: 'If that email exists, a new code has been sent'
+            });
+        }
+
+        if (!twilioClient || !VERIFY_SERVICE_SID) {
+            return res.status(500).json({
+                success: false,
+                message: 'Verification service not configured'
+            });
+        }
+
+        try {
+            await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                .verifications
+                .create({ to: email.toLowerCase(), channel: 'email' });
+
+            console.log(`📧 Resent verification code to: ${email}`);
+
+            // Create new pending token
+            const pendingToken = jwt.sign(
+                { id: user._id, pending: true },
+                process.env.JWT_SECRET,
+                { expiresIn: '10m' }
+            );
+
+            res.json({
+                success: true,
+                message: 'New verification code sent',
+                pendingToken
+            });
+        } catch (twilioError) {
+            console.error('Twilio resend error:', twilioError.message);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to send verification code'
+            });
+        }
+
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
+    }
+};
+
+// ============================================
+// HELPER: Complete Login (shared logic)
+// ============================================
+async function completeLogin(user, res) {
+    // Check and expire trial if needed
+    const trialExpired = await user.checkTrialExpiration();
+    if (trialExpired) {
+        console.log(`⏰ Trial expired for: ${user.email}`);
+    }
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate full token with userType
+    const token = jwt.sign(
+        { id: user._id, userType: user.userType },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+    );
+
+    // Get trial status
+    const isTrialActive = user.isTrialActive();
+    const trialHoursRemaining = user.getTrialRemainingHours();
+
+    console.log(`✅ Login successful for ${user.userType}: ${user.email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
+
+    return res.json({
+        success: true,
+        message: 'Login successful',
+        token,
+        user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            userType: user.userType,
+            emailVerified: user.emailVerified || false,
+            subscription: {
+                ...user.subscription.toObject(),
+                isTrialActive,
+                trialHoursRemaining
+            },
+            onboarding: user.onboarding,
+            coachId: user.coachId
+        }
+    });
+}
 
 // ============================================
 // LOGOUT

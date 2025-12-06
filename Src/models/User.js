@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema({
     }
   },
 
+  // Email verification status
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+
   // ═══════════════════════════════════════════════════════════
   // USER TYPE - THE KEY FIELD (B2C/B2B Hybrid)
   // ═══════════════════════════════════════════════════════════
