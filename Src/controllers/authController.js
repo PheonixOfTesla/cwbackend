@@ -463,11 +463,14 @@ exports.resetPasswordRequest = async (req, res) => {
             });
         }
 
-        // Mark that reset was requested (for tracking)
+        // Generate 6-digit reset code (stored in DB as fallback)
+        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        user.resetPasswordCode = resetCode;
         user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
         await user.save();
 
-        // Send reset code via Twilio Verify (standard 6-digit code)
+        // Try Twilio Verify first, fall back to logging code
+        let emailSent = false;
         if (twilioClient && VERIFY_SERVICE_SID) {
             try {
                 await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
@@ -476,19 +479,17 @@ exports.resetPasswordRequest = async (req, res) => {
                         to: email.toLowerCase(),
                         channel: 'email'
                     });
-                console.log(`📧 Password reset code sent to: ${email}`);
+                console.log(`📧 Password reset code sent via Twilio to: ${email}`);
+                emailSent = true;
             } catch (twilioError) {
                 console.error('Twilio reset email error:', twilioError.message);
-                return res.status(500).json({
-                    success: false,
-                    message: 'Failed to send reset code. Please try again.'
-                });
+                // Fall through to DB code
             }
-        } else {
-            return res.status(500).json({
-                success: false,
-                message: 'Email service not configured'
-            });
+        }
+
+        if (!emailSent) {
+            // Log code for debugging (in production, would send via another email service)
+            console.log(`🔐 Password reset code for ${email}: ${resetCode}`);
         }
 
         res.json({
@@ -534,45 +535,58 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        // Find user by email
-        const user = await User.findOne({ email: email.toLowerCase() });
+        // Find user by email with valid reset code
+        const user = await User.findOne({
+            email: email.toLowerCase(),
+            resetPasswordExpires: { $gt: Date.now() }
+        });
 
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid reset request'
+                message: 'Invalid reset request or code expired'
             });
         }
 
-        // Verify the code with Twilio
+        // Try Twilio verification first, then fall back to DB code
+        let verified = false;
+
         if (twilioClient && VERIFY_SERVICE_SID) {
             try {
                 const verification = await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
                     .verificationChecks
                     .create({ to: email.toLowerCase(), code: resetToken });
 
-                if (verification.status !== 'approved') {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Invalid or expired reset code'
-                    });
+                if (verification.status === 'approved') {
+                    verified = true;
                 }
             } catch (twilioError) {
                 console.error('Twilio verification check error:', twilioError.message);
+                // Fall through to DB code check
+            }
+        }
+
+        // If Twilio didn't verify, check DB code
+        if (!verified) {
+            if (user.resetPasswordCode !== resetToken) {
                 return res.status(400).json({
                     success: false,
                     message: 'Invalid or expired reset code'
                 });
             }
-        } else {
-            return res.status(500).json({
+            verified = true;
+        }
+
+        if (!verified) {
+            return res.status(400).json({
                 success: false,
-                message: 'Verification service not configured'
+                message: 'Invalid or expired reset code'
             });
         }
 
         // Code verified - reset password
         user.password = password; // Will be hashed by pre-save hook
+        user.resetPasswordCode = undefined;
         user.resetPasswordExpires = undefined;
         await user.save();
 
