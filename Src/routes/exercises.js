@@ -33,6 +33,9 @@ router.get('/videos/equipment/:equipment', exerciseController.getVideoByEquipmen
 // Refresh video library cache (admin only)
 router.post('/videos/refresh', protect, checkRole(['admin']), exerciseController.refreshVideoLibrary);
 
+// Get exercise variations and why it's recommended (requires auth for personalization)
+router.get('/videos/:id/variations', protect, exerciseController.getExerciseVariations);
+
 // Get single exercise from video library
 router.get('/videos/:id', exerciseController.getVideoExerciseById);
 

@@ -38,6 +38,31 @@ const exerciseSchema = new mongoose.Schema({
         default: true
     },
     tags: [String], // New: For better search
+
+    // Exercise variations and alternatives
+    variations: [{
+        name: String,
+        difficulty: { type: String, enum: ['easier', 'same', 'harder'] },
+        equipment: String,
+        notes: String
+    }],
+
+    // Why this exercise is good for specific goals
+    benefitsForGoals: {
+        buildStrength: String,
+        buildMuscle: String,
+        loseFat: String,
+        improveEndurance: String,
+        generalHealth: String
+    },
+
+    // Movement pattern for smart substitutions
+    movementPattern: {
+        type: String,
+        enum: ['squat', 'hinge', 'push', 'pull', 'carry', 'lunge', 'rotation', 'isolation', 'cardio'],
+        default: 'isolation'
+    },
+
     createdAt: {
         type: Date,
         default: Date.now

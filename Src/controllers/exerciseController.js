@@ -203,6 +203,81 @@ exports.refreshVideoLibrary = async (req, res) => {
     }
 };
 
+// Get exercise variations and why it's recommended
+exports.getExerciseVariations = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const exercise = await exerciseService.getById(id);
+
+        if (!exercise) {
+            return res.status(404).json({ success: false, message: 'Exercise not found' });
+        }
+
+        // Get all exercises to find variations
+        const allExercises = await exerciseService.getAllExercises();
+
+        // Find variations: same primary muscle, different name
+        const primaryMuscle = exercise.primaryMuscles?.[0]?.toLowerCase();
+        const variations = allExercises
+            .filter(ex =>
+                ex.id !== exercise.id &&
+                ex.primaryMuscles?.some(m => m.toLowerCase() === primaryMuscle)
+            )
+            .slice(0, 6)
+            .map(ex => ({
+                id: ex.id,
+                name: ex.name,
+                equipment: ex.equipment,
+                difficulty: ex.difficulty,
+                hasVideo: ex.hasVideo,
+                difficultyLabel: ex.equipment === exercise.equipment ? 'same' :
+                    (ex.equipment === 'bodyweight' ? 'easier' : 'harder')
+            }));
+
+        // Generate personalized "why it's recommended" based on user goal
+        const userGoal = req.user?.primaryGoal?.type || 'general-health';
+        const recommendations = {
+            'build-strength': {
+                reason: `${exercise.name} is excellent for building raw strength. The ${exercise.equipment || 'compound'} movement allows for progressive overload - the key to getting stronger.`,
+                tip: 'Focus on 3-5 reps with heavy weight. Rest 3-5 minutes between sets.'
+            },
+            'build-muscle': {
+                reason: `${exercise.name} targets your ${primaryMuscle || 'muscles'} effectively for hypertrophy. The full range of motion maximizes muscle fiber recruitment.`,
+                tip: 'Aim for 8-12 reps with controlled tempo. Mind-muscle connection is key.'
+            },
+            'lose-fat': {
+                reason: `${exercise.name} is a ${exercise.equipment === 'bodyweight' ? 'bodyweight' : 'resistance'} exercise that burns calories while preserving muscle mass during your cut.`,
+                tip: 'Keep rest periods short (30-60s) and superset with another exercise.'
+            },
+            'improve-endurance': {
+                reason: `${exercise.name} can be performed for higher reps to build muscular endurance in your ${primaryMuscle || 'target muscles'}.`,
+                tip: 'Try 15-20 reps with lighter weight, or circuit-style training.'
+            },
+            'general-health': {
+                reason: `${exercise.name} is a fundamental movement that improves overall fitness and functional strength.`,
+                tip: 'Focus on proper form first. 10-15 reps is a good starting point.'
+            }
+        };
+
+        const recommendation = recommendations[userGoal] || recommendations['general-health'];
+
+        res.json({
+            success: true,
+            exercise: {
+                id: exercise.id,
+                name: exercise.name,
+                primaryMuscles: exercise.primaryMuscles,
+                equipment: exercise.equipment
+            },
+            whyRecommended: recommendation,
+            variations
+        });
+    } catch (error) {
+        console.error('Get exercise variations error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // ============================================
 // STATIC EXERCISE LIBRARY (500+ exercises)
 // ============================================
