@@ -49,10 +49,20 @@ exports.createCheckout = async (req, res) => {
   try {
     const { priceKey, successUrl, cancelUrl } = req.body;
 
+    // Check if Stripe is configured
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: 'Stripe is not configured. Please contact support.'
+      });
+    }
+
+    // Check if price ID is configured
     if (!STRIPE_PRICES[priceKey]) {
+      console.error(`Missing Stripe price for ${priceKey}. Set STRIPE_PRO_MONTHLY_PRICE_ID in environment.`);
       return res.status(400).json({
         success: false,
-        message: 'Invalid price selected'
+        message: 'Subscription pricing not configured. Please contact support.'
       });
     }
 
