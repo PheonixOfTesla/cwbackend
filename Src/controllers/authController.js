@@ -412,7 +412,7 @@ exports.logout = async (req, res) => {
 };
 
 // ============================================
-// REQUEST PASSWORD RESET
+// REQUEST PASSWORD RESET (via Twilio Verify email)
 // ============================================
 exports.resetPasswordRequest = async (req, res) => {
     try {
@@ -443,20 +443,30 @@ exports.resetPasswordRequest = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         await user.save();
 
-        // TODO: Send email with resetCode
-        console.log(`🔐 Password reset code for ${email}: ${resetCode}`);
-
-        const response = {
-            success: true,
-            message: successMessage
-        };
-
-        if (process.env.NODE_ENV === 'development') {
-            response.resetCode = resetCode;
-            response._devNote = 'Reset code only shown in development mode';
+        // Send reset code via Twilio Verify
+        if (twilioClient && VERIFY_SERVICE_SID) {
+            try {
+                // Use Twilio Verify with custom code template
+                await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                    .verifications
+                    .create({
+                        to: email.toLowerCase(),
+                        channel: 'email',
+                        customCode: resetCode  // Send our 3-digit code
+                    });
+                console.log(`📧 Password reset code sent to: ${email}`);
+            } catch (twilioError) {
+                console.error('Twilio reset email error:', twilioError.message);
+                // Continue anyway - code is saved in DB
+            }
+        } else {
+            console.log(`🔐 Password reset code for ${email}: ${resetCode} (Twilio not configured)`);
         }
 
-        res.json(response);
+        res.json({
+            success: true,
+            message: successMessage
+        });
 
     } catch (error) {
         console.error('Password reset request error:', error);
