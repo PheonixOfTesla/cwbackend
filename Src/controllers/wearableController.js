@@ -942,13 +942,13 @@ const handleOAuth2Callback = async (req, res) => {
 
     if (error) {
       console.error('❌ OAuth error:', error);
-      return res.redirect(`${process.env.FRONTEND_URL || 'https://clockwork.fit'}/?wearable_error=oauth_error`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://cwfrontend-main.vercel.app'}/?wearable_error=oauth_error`);
     }
 
     const stateData = await verifyState(state);
     if (!stateData) {
       console.error('❌ Invalid state');
-      return res.redirect(`${process.env.FRONTEND_URL || 'https://clockwork.fit'}/?wearable_error=invalid_state`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://cwfrontend-main.vercel.app'}/?wearable_error=invalid_state`);
     }
 
     console.log('✅ State verified');
@@ -997,10 +997,10 @@ const handleOAuth2Callback = async (req, res) => {
 
     console.log('✅ Connection complete');
 
-    return res.redirect(`${process.env.FRONTEND_URL || 'https://clockwork.fit'}/?wearable_connected=${provider}`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'https://cwfrontend-main.vercel.app'}/?wearable_connected=${provider}`);
   } catch (error) {
     console.error('❌ OAuth callback error:', error.response?.data || error.message);
-    return res.redirect(`${process.env.FRONTEND_URL || 'https://clockwork.fit'}/?wearable_error=auth_failed`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'https://cwfrontend-main.vercel.app'}/?wearable_error=auth_failed`);
   }
 };
 
