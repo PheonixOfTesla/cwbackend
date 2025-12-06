@@ -9,6 +9,39 @@ const Workout = require('../models/Workout');
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
 
+// Helper function to normalize event type to valid enum values
+// Placed at top so it can be used by both generateWeek and generateMonth
+function normalizeEventType(type) {
+  const typeMap = {
+    'rest': 'rest-day',
+    'rest day': 'rest-day',
+    'restday': 'rest-day',
+    'recovery': 'rest-day',
+    'active recovery': 'rest-day',
+    'active-recovery': 'rest-day',
+    'off': 'rest-day',
+    'off-day': 'rest-day',
+    'deload': 'deload',
+    'deload-day': 'deload',
+    'competition': 'competition',
+    'comp': 'competition',
+    'meet': 'competition',
+    'weigh-in': 'weigh-in',
+    'weighin': 'weigh-in',
+    'check-in': 'check-in',
+    'checkin': 'check-in',
+    'cardio': 'cardio',
+    'conditioning': 'cardio',
+    'workout': 'workout',
+    'training': 'workout',
+    'strength': 'workout',
+    'hypertrophy': 'workout'
+  };
+
+  const normalized = type?.toLowerCase()?.trim();
+  return typeMap[normalized] || 'workout'; // Default to workout if unknown
+}
+
 /**
  * Get calendar events for a date range
  * GET /api/calendar/:userId?start=2025-01-01&end=2025-01-31
@@ -348,10 +381,13 @@ exports.generateWeek = async (req, res) => {
       const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
       eventDate.setDate(eventDate.getDate() + daysToAdd);
 
+      // Normalize the type to valid enum values
+      const normalizedType = normalizeEventType(day.type);
+
       const eventData = {
         userId,
-        type: day.type || 'workout',
-        title: day.workoutName || day.title || `${day.type || 'Workout'} Day`,
+        type: normalizedType,
+        title: day.workoutName || day.title || `${normalizedType === 'rest-day' ? 'Rest' : 'Workout'} Day`,
         description: day.description || (day.exercises ? day.exercises.map(e => `${e.name}: ${e.sets}x${e.reps}`).join(', ') : ''),
         date: eventDate,
         startTime: day.startTime || user.schedule?.preferredTime || '09:00',
@@ -572,10 +608,13 @@ exports.generateMonth = async (req, res) => {
         const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
         eventDate.setDate(eventDate.getDate() + daysToAdd);
 
+        // IMPORTANT: Normalize the type to valid enum values
+        const normalizedType = normalizeEventType(day.type);
+
         const eventData = {
           userId,
-          type: day.type || 'workout',
-          title: day.workoutName || day.title || `${day.type || 'Workout'} Day`,
+          type: normalizedType,
+          title: day.workoutName || day.title || `${normalizedType === 'rest-day' ? 'Rest' : 'Workout'} Day`,
           description: day.description || (day.exercises ? day.exercises.map(e => `${e.name}: ${e.sets}x${e.reps}`).join(', ') : ''),
           date: eventDate,
           startTime: day.startTime || user.schedule?.preferredTime || '09:00',
