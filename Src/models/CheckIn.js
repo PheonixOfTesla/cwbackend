@@ -64,6 +64,15 @@ const checkInSchema = new mongoose.Schema({
   }],
 
   // ═══════════════════════════════════════
+  // HABIT TRACKING
+  // ═══════════════════════════════════════
+  habits: {
+    waterCups: { type: Number, min: 0, max: 20 },
+    supplements: [{ type: String, trim: true }],  // ['protein', 'creatine', 'vitamins']
+    steps: { type: Number, min: 0 }
+  },
+
+  // ═══════════════════════════════════════
   // AI RECOMMENDATION
   // ═══════════════════════════════════════
   aiRecommendation: {
