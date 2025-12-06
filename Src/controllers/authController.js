@@ -5,12 +5,26 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// Twilio Verify for email verification
+// Twilio Verify for email verification (with validation)
 const twilio = require('twilio');
-const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    : null;
+let twilioClient = null;
 const VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE;
+
+// Only initialize Twilio if credentials are valid
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+if (accountSid && authToken && accountSid.startsWith('AC')) {
+    try {
+        twilioClient = twilio(accountSid, authToken);
+        console.log('✅ Twilio client initialized successfully');
+    } catch (err) {
+        console.error('⚠️ Twilio initialization failed:', err.message);
+    }
+} else if (accountSid && !accountSid.startsWith('AC')) {
+    console.error('⚠️ TWILIO_ACCOUNT_SID is invalid (must start with AC). Current value starts with:', accountSid.substring(0, 4));
+} else {
+    console.log('⚠️ Twilio not configured - email verification disabled');
+}
 
 // ============================================
 // REGISTER (Updated for userType)
