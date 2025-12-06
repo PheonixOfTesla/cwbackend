@@ -1,70 +1,537 @@
-const Nutrition = require('../models/Nutrition');
+// ============================================
+// THE FORGE KITCHEN - Nutrition Controller
+// AI-powered meal planning, TDEE calculation, food logging
+// ============================================
 
-exports.getNutritionByClient = async (req, res) => {
+const Nutrition = require('../models/Nutrition');
+const User = require('../models/User');
+const Anthropic = require('@anthropic-ai/sdk');
+
+// Initialize Anthropic (Claude)
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+
+// ============================================
+// TDEE & MACRO CALCULATION (Mifflin-St Jeor)
+// ============================================
+
+function calculateTDEE(profile, activityLevel, goal) {
+  const { currentWeight, height, dateOfBirth, gender } = profile;
+
+  // Convert units if needed (assume imperial, convert to metric for calculation)
+  const weightKg = currentWeight * 0.453592; // lbs to kg
+  const heightCm = height * 2.54; // inches to cm
+
+  // Calculate age
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  age = age || 25; // Default age if not provided
+
+  // Mifflin-St Jeor Equation for BMR
+  let bmr;
+  if (gender === 'male') {
+    bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+  } else {
+    bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+  }
+
+  // Activity multipliers
+  const activityMultipliers = {
+    'sedentary': 1.2,      // Little to no exercise
+    'light': 1.375,        // Light exercise 1-3 days/week
+    'moderate': 1.55,      // Moderate exercise 3-5 days/week
+    'active': 1.725,       // Heavy exercise 6-7 days/week
+    'very_active': 1.9     // Very heavy exercise, physical job
+  };
+
+  const multiplier = activityMultipliers[activityLevel] || 1.55;
+  let tdee = Math.round(bmr * multiplier);
+
+  // Goal adjustments
+  let goalCalories = tdee;
+  if (goal === 'lose') {
+    goalCalories = tdee - 500; // 500 cal deficit for ~1lb/week loss
+  } else if (goal === 'gain') {
+    goalCalories = tdee + 300; // 300 cal surplus for lean gains
+  } else if (goal === 'recomp') {
+    goalCalories = tdee; // Eat at maintenance
+  }
+
+  // Macro calculation (strength training focused)
+  const proteinGrams = Math.round(weightKg * 2.0); // 2g per kg for strength
+  const fatGrams = Math.round((goalCalories * 0.25) / 9); // 25% from fat
+  const carbGrams = Math.round((goalCalories - (proteinGrams * 4) - (fatGrams * 9)) / 4);
+
+  return {
+    bmr: Math.round(bmr),
+    tdee,
+    calories: goalCalories,
+    protein: proteinGrams,
+    carbs: carbGrams,
+    fat: fatGrams,
+    fiber: 25 + Math.round(goalCalories / 1000) * 5, // ~25-35g based on calories
+    water: Math.round(weightKg * 35), // 35ml per kg
+    calculatedAt: new Date(),
+    calculationMethod: 'mifflin-st-jeor'
+  };
+}
+
+// ============================================
+// GET NUTRITION (for current user)
+// ============================================
+exports.getMyNutrition = async (req, res) => {
   try {
-    let nutrition = await Nutrition.findOne({ 
-      clientId: req.params.clientId 
-    });
-    
-    // If no nutrition plan exists, create a default one
-    if (!nutrition) {
-      nutrition = {
-        clientId: req.params.clientId,
-        protein: { target: 0, current: 0 },
-        carbs: { target: 0, current: 0 },
-        fat: { target: 0, current: 0 },
-        calories: { target: 0, current: 0 },
-        mealPlan: {
-          breakfast: '',
-          lunch: '',
-          dinner: '',
-          snacks: ''
-        },
-        dailyLogs: []
-      };
-    } else {
-      // Ensure the data structure is complete even for existing records
-      nutrition = nutrition.toObject();
-      nutrition.protein = nutrition.protein || { target: 0, current: 0 };
-      nutrition.carbs = nutrition.carbs || { target: 0, current: 0 };
-      nutrition.fat = nutrition.fat || { target: 0, current: 0 };
-      nutrition.calories = nutrition.calories || { target: 0, current: 0 };
-      nutrition.mealPlan = nutrition.mealPlan || {
-        breakfast: '',
-        lunch: '',
-        dinner: '',
-        snacks: ''
-      };
-      nutrition.dailyLogs = nutrition.dailyLogs || [];
+    const userId = req.user.id;
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    // Get user for profile data
+    const user = await User.findById(userId);
+
+    // If no targets calculated yet, calculate them
+    if (!nutrition.targets?.tdee && user?.profile?.currentWeight) {
+      const targets = calculateTDEE(
+        user.profile,
+        nutrition.activityLevel || 'moderate',
+        nutrition.nutritionGoal || 'maintain'
+      );
+      nutrition.targets = targets;
+      await nutrition.save();
     }
-    
-    res.json(nutrition);
-  } catch (error) {
-    console.error('Error fetching nutrition:', error);
-    res.status(500).json({ 
-      message: error.message,
-      // Return a default structure on error
+
+    // Get today's log
+    const todayLog = nutrition.getTodayLog();
+
+    res.json({
+      success: true,
       data: {
-        protein: { target: 0, current: 0 },
-        carbs: { target: 0, current: 0 },
-        fat: { target: 0, current: 0 },
-        calories: { target: 0, current: 0 },
-        mealPlan: {
-          breakfast: '',
-          lunch: '',
-          dinner: '',
-          snacks: ''
+        targets: nutrition.targets,
+        activityLevel: nutrition.activityLevel,
+        nutritionGoal: nutrition.nutritionGoal,
+        currentMealPlan: nutrition.currentMealPlan,
+        todayLog: todayLog || { meals: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0 } },
+        preferences: nutrition.preferences
+      }
+    });
+  } catch (error) {
+    console.error('Get nutrition error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// CALCULATE/RECALCULATE TARGETS
+// ============================================
+exports.calculateTargets = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { activityLevel, nutritionGoal } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user?.profile?.currentWeight) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please complete your profile with weight and height first'
+      });
+    }
+
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    // Update settings
+    if (activityLevel) nutrition.activityLevel = activityLevel;
+    if (nutritionGoal) nutrition.nutritionGoal = nutritionGoal;
+
+    // Calculate new targets
+    const targets = calculateTDEE(
+      user.profile,
+      nutrition.activityLevel,
+      nutrition.nutritionGoal
+    );
+
+    nutrition.targets = targets;
+    await nutrition.save();
+
+    console.log(`🍽️ Calculated nutrition targets for ${user.name}: ${targets.calories} cal`);
+
+    res.json({
+      success: true,
+      message: 'Nutrition targets calculated',
+      data: {
+        targets,
+        activityLevel: nutrition.activityLevel,
+        nutritionGoal: nutrition.nutritionGoal
+      }
+    });
+  } catch (error) {
+    console.error('Calculate targets error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// GENERATE AI MEAL PLAN (FORGE Kitchen)
+// ============================================
+exports.generateMealPlan = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    // Ensure targets are calculated
+    if (!nutrition.targets?.calories) {
+      if (!user?.profile?.currentWeight) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete your profile first'
+        });
+      }
+      nutrition.targets = calculateTDEE(
+        user.profile,
+        nutrition.activityLevel || 'moderate',
+        nutrition.nutritionGoal || 'maintain'
+      );
+    }
+
+    const { calories, protein, carbs, fat } = nutrition.targets;
+    const preferences = nutrition.preferences || {};
+
+    const prompt = `You are FORGE Kitchen - the nutrition wing of ClockWork fitness AI.
+
+Generate a daily meal plan for this user:
+
+TARGETS:
+- Calories: ${calories} kcal
+- Protein: ${protein}g
+- Carbs: ${carbs}g
+- Fat: ${fat}g
+
+PREFERENCES:
+- Dietary restrictions: ${preferences.dietaryRestrictions?.join(', ') || 'None'}
+- Allergies: ${preferences.allergies?.join(', ') || 'None'}
+- Cooking skill: ${preferences.cookingSkill || 'intermediate'}
+- Max prep time: ${preferences.prepTimeMax || 30} minutes per meal
+- Budget: ${preferences.budget || 'moderate'}
+
+Generate 5 meals (breakfast, morning snack, lunch, afternoon snack, dinner) that hit these macros.
+
+Return ONLY valid JSON:
+{
+  "breakfast": {
+    "name": "Meal name",
+    "description": "Brief description",
+    "calories": 500,
+    "protein": 35,
+    "carbs": 45,
+    "fat": 18,
+    "ingredients": ["ingredient 1", "ingredient 2"],
+    "prepTime": 15,
+    "imageCategory": "eggs"
+  },
+  "snack1": { ... },
+  "lunch": { ... },
+  "snack2": { ... },
+  "dinner": { ... },
+  "totalCalories": 2400,
+  "totalProtein": 180,
+  "totalCarbs": 240,
+  "totalFat": 80,
+  "shoppingList": ["item1", "item2", ...]
+}
+
+For imageCategory, use one of: eggs, chicken, steak, fish, salad, rice, pasta, sandwich, smoothie, oatmeal, yogurt, nuts, fruit, vegetables, soup`;
+
+    console.log('🍳 FORGE Kitchen generating meal plan...');
+
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const aiText = message.content[0].text;
+
+    // Parse response
+    let mealPlan;
+    try {
+      const jsonMatch = aiText.match(/```(?:json)?\s*([\s\S]*?)```/) || aiText.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiText;
+      mealPlan = JSON.parse(jsonStr.trim());
+    } catch (parseError) {
+      console.error('Failed to parse meal plan:', parseError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate meal plan',
+        aiResponse: aiText
+      });
+    }
+
+    // Fetch images for each meal from free APIs
+    const mealsWithImages = await addMealImages(mealPlan);
+
+    // Save to nutrition record
+    nutrition.currentMealPlan = {
+      generatedAt: new Date(),
+      generatedBy: 'forge',
+      breakfast: mealsWithImages.breakfast,
+      snack1: mealsWithImages.snack1,
+      lunch: mealsWithImages.lunch,
+      snack2: mealsWithImages.snack2,
+      dinner: mealsWithImages.dinner,
+      totalCalories: mealPlan.totalCalories,
+      totalProtein: mealPlan.totalProtein,
+      totalCarbs: mealPlan.totalCarbs,
+      totalFat: mealPlan.totalFat
+    };
+
+    await nutrition.save();
+
+    console.log(`✅ FORGE Kitchen generated meal plan: ${mealPlan.totalCalories} calories`);
+
+    res.json({
+      success: true,
+      message: 'Meal plan generated by FORGE Kitchen',
+      data: {
+        mealPlan: nutrition.currentMealPlan,
+        shoppingList: mealPlan.shoppingList || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Generate meal plan error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ADD IMAGES TO MEALS (Free APIs)
+// ============================================
+async function addMealImages(mealPlan) {
+  const meals = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+
+  for (const mealType of meals) {
+    const meal = mealPlan[mealType];
+    if (!meal) continue;
+
+    try {
+      // Try TheMealDB first (has real food images)
+      const mealName = meal.name?.split(' ')[0] || meal.imageCategory || 'chicken';
+      const mealDbUrl = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(mealName)}`;
+
+      const response = await fetch(mealDbUrl);
+      const data = await response.json();
+
+      if (data.meals && data.meals.length > 0) {
+        // Get random meal from results
+        const randomMeal = data.meals[Math.floor(Math.random() * data.meals.length)];
+        meal.imageUrl = randomMeal.strMealThumb;
+      } else {
+        // Fallback to category-based placeholder
+        meal.imageUrl = getFallbackImage(meal.imageCategory || mealType);
+      }
+    } catch (err) {
+      console.error(`Failed to fetch image for ${mealType}:`, err.message);
+      meal.imageUrl = getFallbackImage(meal.imageCategory || mealType);
+    }
+  }
+
+  return mealPlan;
+}
+
+// Fallback images (using Unsplash source - free, no API key)
+function getFallbackImage(category) {
+  const categoryImages = {
+    'eggs': 'https://images.unsplash.com/photo-1482049016gy9-41d9d3c42303?w=400',
+    'chicken': 'https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400',
+    'steak': 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400',
+    'fish': 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400',
+    'salad': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400',
+    'rice': 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400',
+    'pasta': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=400',
+    'sandwich': 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400',
+    'smoothie': 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=400',
+    'oatmeal': 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=400',
+    'yogurt': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400',
+    'nuts': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=400',
+    'fruit': 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=400',
+    'vegetables': 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400',
+    'soup': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400',
+    'breakfast': 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=400',
+    'snack1': 'https://images.unsplash.com/photo-1604909052743-94e838986d24?w=400',
+    'lunch': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+    'snack2': 'https://images.unsplash.com/photo-1587049016823-69ef9d68bd44?w=400',
+    'dinner': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400'
+  };
+
+  return categoryImages[category] || categoryImages['lunch'];
+}
+
+// ============================================
+// LOG FOOD
+// ============================================
+exports.logFood = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { mealType, name, calories, protein, carbs, fat, time } = req.body;
+
+    if (!name || !calories) {
+      return res.status(400).json({
+        success: false,
+        message: 'Meal name and calories are required'
+      });
+    }
+
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    const mealData = {
+      mealType: mealType || 'snack',
+      name,
+      calories: parseFloat(calories) || 0,
+      protein: parseFloat(protein) || 0,
+      carbs: parseFloat(carbs) || 0,
+      fat: parseFloat(fat) || 0,
+      time: time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const todayLog = await nutrition.addToTodayLog(mealData);
+
+    console.log(`📝 Logged ${name} (${calories} cal) for user ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Food logged',
+      data: {
+        logged: mealData,
+        todayTotals: todayLog.totals
+      }
+    });
+  } catch (error) {
+    console.error('Log food error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// GET DAILY SUMMARY
+// ============================================
+exports.getDailySummary = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { date } = req.query;
+
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    let targetDate = date ? new Date(date) : new Date();
+    targetDate.setHours(0, 0, 0, 0);
+
+    const dayLog = nutrition.dailyLogs.find(log => {
+      const logDate = new Date(log.date);
+      logDate.setHours(0, 0, 0, 0);
+      return logDate.getTime() === targetDate.getTime();
+    });
+
+    const targets = nutrition.targets || {};
+    const consumed = dayLog?.totals || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+    res.json({
+      success: true,
+      data: {
+        date: targetDate,
+        targets: {
+          calories: targets.calories || 0,
+          protein: targets.protein || 0,
+          carbs: targets.carbs || 0,
+          fat: targets.fat || 0
+        },
+        consumed,
+        remaining: {
+          calories: (targets.calories || 0) - consumed.calories,
+          protein: (targets.protein || 0) - consumed.protein,
+          carbs: (targets.carbs || 0) - consumed.carbs,
+          fat: (targets.fat || 0) - consumed.fat
+        },
+        meals: dayLog?.meals || [],
+        percentages: {
+          calories: targets.calories ? Math.round((consumed.calories / targets.calories) * 100) : 0,
+          protein: targets.protein ? Math.round((consumed.protein / targets.protein) * 100) : 0,
+          carbs: targets.carbs ? Math.round((consumed.carbs / targets.carbs) * 100) : 0,
+          fat: targets.fat ? Math.round((consumed.fat / targets.fat) * 100) : 0
         }
       }
     });
+  } catch (error) {
+    console.error('Get daily summary error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// UPDATE PREFERENCES
+// ============================================
+exports.updatePreferences = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { dietaryRestrictions, allergies, cuisinePreferences, cookingSkill, budget, prepTimeMax } = req.body;
+
+    let nutrition = await Nutrition.getOrCreateForUser(userId);
+
+    if (dietaryRestrictions) nutrition.preferences.dietaryRestrictions = dietaryRestrictions;
+    if (allergies) nutrition.preferences.allergies = allergies;
+    if (cuisinePreferences) nutrition.preferences.cuisinePreferences = cuisinePreferences;
+    if (cookingSkill) nutrition.preferences.cookingSkill = cookingSkill;
+    if (budget) nutrition.preferences.budget = budget;
+    if (prepTimeMax) nutrition.preferences.prepTimeMax = prepTimeMax;
+
+    await nutrition.save();
+
+    res.json({
+      success: true,
+      message: 'Preferences updated',
+      data: nutrition.preferences
+    });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// LEGACY ENDPOINTS (backwards compatibility)
+// ============================================
+exports.getNutritionByClient = async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    let nutrition = await Nutrition.findOne({
+      $or: [{ userId: clientId }, { clientId }]
+    });
+
+    if (!nutrition) {
+      nutrition = {
+        clientId,
+        protein: { target: 0, current: 0 },
+        carbs: { target: 0, current: 0 },
+        fat: { target: 0, current: 0 },
+        calories: { target: 0, current: 0 },
+        mealPlan: { breakfast: '', lunch: '', dinner: '', snacks: '' },
+        dailyLogs: []
+      };
+    }
+
+    res.json(nutrition);
+  } catch (error) {
+    console.error('Error fetching nutrition:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
 exports.createOrUpdateNutrition = async (req, res) => {
   try {
-    // Ensure proper data structure with defaults
     const nutritionData = {
       clientId: req.params.clientId,
+      userId: req.params.clientId,
       assignedBy: req.user.id,
       protein: {
         target: req.body.protein?.target || 0,
@@ -90,27 +557,14 @@ exports.createOrUpdateNutrition = async (req, res) => {
       },
       updatedAt: new Date()
     };
-    
+
     const nutrition = await Nutrition.findOneAndUpdate(
-      { clientId: req.params.clientId },
+      { $or: [{ userId: req.params.clientId }, { clientId: req.params.clientId }] },
       nutritionData,
       { new: true, upsert: true, runValidators: true }
     );
-    
-    // Ensure response has complete structure
-    const response = nutrition.toObject();
-    response.protein = response.protein || { target: 0, current: 0 };
-    response.carbs = response.carbs || { target: 0, current: 0 };
-    response.fat = response.fat || { target: 0, current: 0 };
-    response.calories = response.calories || { target: 0, current: 0 };
-    response.mealPlan = response.mealPlan || {
-      breakfast: '',
-      lunch: '',
-      dinner: '',
-      snacks: ''
-    };
-    
-    res.json(response);
+
+    res.json(nutrition);
   } catch (error) {
     console.error('Error creating/updating nutrition:', error);
     res.status(500).json({ message: error.message });
@@ -119,28 +573,18 @@ exports.createOrUpdateNutrition = async (req, res) => {
 
 exports.logDailyNutrition = async (req, res) => {
   try {
-    let nutrition = await Nutrition.findOne({ clientId: req.params.clientId });
-    
+    let nutrition = await Nutrition.findOne({
+      $or: [{ userId: req.params.clientId }, { clientId: req.params.clientId }]
+    });
+
     if (!nutrition) {
-      // Create a new nutrition plan if it doesn't exist
       nutrition = new Nutrition({
         clientId: req.params.clientId,
-        assignedBy: req.user.id,
-        protein: { target: 0, current: 0 },
-        carbs: { target: 0, current: 0 },
-        fat: { target: 0, current: 0 },
-        calories: { target: 0, current: 0 },
-        mealPlan: {
-          breakfast: '',
-          lunch: '',
-          dinner: '',
-          snacks: ''
-        },
-        dailyLogs: []
+        userId: req.params.clientId,
+        assignedBy: req.user.id
       });
     }
-    
-    // Add the daily log entry
+
     nutrition.dailyLogs.push({
       date: new Date(),
       protein: parseFloat(req.body.protein) || 0,
@@ -149,66 +593,30 @@ exports.logDailyNutrition = async (req, res) => {
       calories: parseFloat(req.body.calories) || 0,
       notes: req.body.notes || ''
     });
-    
-    // Update current values if provided
-    if (req.body.protein !== undefined) {
-      nutrition.protein = nutrition.protein || { target: 0, current: 0 };
-      nutrition.protein.current = parseFloat(req.body.protein) || 0;
-    }
-    if (req.body.carbs !== undefined) {
-      nutrition.carbs = nutrition.carbs || { target: 0, current: 0 };
-      nutrition.carbs.current = parseFloat(req.body.carbs) || 0;
-    }
-    if (req.body.fat !== undefined) {
-      nutrition.fat = nutrition.fat || { target: 0, current: 0 };
-      nutrition.fat.current = parseFloat(req.body.fat) || 0;
-    }
-    if (req.body.calories !== undefined) {
-      nutrition.calories = nutrition.calories || { target: 0, current: 0 };
-      nutrition.calories.current = parseFloat(req.body.calories) || 0;
-    }
-    
+
     await nutrition.save();
-    
-    // Ensure response has complete structure
-    const response = nutrition.toObject();
-    response.protein = response.protein || { target: 0, current: 0 };
-    response.carbs = response.carbs || { target: 0, current: 0 };
-    response.fat = response.fat || { target: 0, current: 0 };
-    response.calories = response.calories || { target: 0, current: 0 };
-    response.mealPlan = response.mealPlan || {
-      breakfast: '',
-      lunch: '',
-      dinner: '',
-      snacks: ''
-    };
-    
-    res.json(response);
+    res.json(nutrition);
   } catch (error) {
     console.error('Error logging daily nutrition:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Delete nutrition plan (new method)
 exports.deleteNutrition = async (req, res) => {
   try {
-    const nutrition = await Nutrition.findOneAndDelete({ 
-      clientId: req.params.clientId 
+    const nutrition = await Nutrition.findOneAndDelete({
+      $or: [{ userId: req.params.clientId }, { clientId: req.params.clientId }]
     });
-    
+
     if (!nutrition) {
-      return res.status(404).json({ 
-        message: 'Nutrition plan not found' 
-      });
+      return res.status(404).json({ message: 'Nutrition plan not found' });
     }
-    
-    res.json({ 
-      message: 'Nutrition plan deleted successfully',
-      data: nutrition 
-    });
+
+    res.json({ message: 'Nutrition plan deleted successfully', data: nutrition });
   } catch (error) {
     console.error('Error deleting nutrition:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+module.exports = exports;
