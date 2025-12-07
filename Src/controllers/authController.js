@@ -179,36 +179,7 @@ exports.login = async (req, res) => {
             });
         }
 
-        // If Twilio Verify is configured, send verification code
-        if (twilioClient && VERIFY_SERVICE_SID) {
-            try {
-                await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
-                    .verifications
-                    .create({ to: email.toLowerCase(), channel: 'email' });
-
-                console.log(`📧 Verification code sent to: ${email}`);
-
-                // Create a temporary token that can only be used for verification
-                const pendingToken = jwt.sign(
-                    { id: user._id, pending: true },
-                    process.env.JWT_SECRET,
-                    { expiresIn: '10m' } // 10 minutes to verify
-                );
-
-                return res.json({
-                    success: true,
-                    requiresVerification: true,
-                    message: 'Verification code sent to your email',
-                    pendingToken,
-                    email: email.toLowerCase()
-                });
-            } catch (twilioError) {
-                console.error('Twilio verification error:', twilioError.message);
-                // Fall through to regular login if Twilio fails
-            }
-        }
-
-        // Regular login (no verification or Twilio failed)
+        // Direct login - no email verification required
         return completeLogin(user, res);
 
     } catch (error) {
