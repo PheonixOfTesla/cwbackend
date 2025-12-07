@@ -441,12 +441,8 @@ exports.resetPasswordRequest = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
         await user.save();
 
-        // Send password reset email via Nodemailer
-        const emailSent = await sendPasswordResetCode(email.toLowerCase(), resetCode);
-        if (!emailSent) {
-            // Log code for debugging if email not configured
-            console.log(`🔐 Password reset code for ${email}: ${resetCode}`);
-        }
+        // Send password reset code via SMS (if phone available) or log
+        await sendPasswordResetCode(email.toLowerCase(), resetCode, user.phone);
 
         res.json({
             success: true,

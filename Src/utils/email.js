@@ -29,11 +29,26 @@ const sendSMS = async (to, message) => {
     }
 };
 
-// For password reset - we'll log code since we don't have user phone numbers
-const sendPasswordResetCode = async (email, code) => {
-    // Just log the code - could integrate with email service later
+// For password reset - send SMS if phone available, otherwise log
+const sendPasswordResetCode = async (email, code, phone = null) => {
     console.log(`🔐 PASSWORD RESET CODE for ${email}: ${code}`);
-    return true; // Return true so the flow continues
+
+    // If user has phone and Twilio is configured, send SMS
+    if (phone && twilioClient && twilioPhone) {
+        try {
+            await twilioClient.messages.create({
+                body: `Your ClockWork password reset code is: ${code}. Valid for 10 minutes.`,
+                from: twilioPhone,
+                to: phone
+            });
+            console.log(`📱 Password reset SMS sent to: ${phone}`);
+            return true;
+        } catch (error) {
+            console.error('SMS error:', error.message);
+        }
+    }
+
+    return true; // Return true so flow continues
 };
 
 const sendVerificationCode = async (email, code) => {
