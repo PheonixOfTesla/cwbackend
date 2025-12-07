@@ -46,7 +46,7 @@ exports.twilioStatus = async (req, res) => {
 // ============================================
 exports.register = async (req, res) => {
     try {
-        const { name, email, password, userType } = req.body;
+        const { name, email, password, userType, phone } = req.body;
 
         // Validate required fields
         if (!name || !email || !password) {
@@ -54,6 +54,17 @@ exports.register = async (req, res) => {
                 success: false,
                 message: 'Name, email, and password are required'
             });
+        }
+
+        // Validate phone format if provided
+        if (phone) {
+            const phoneClean = phone.replace(/\D/g, '');
+            if (phoneClean.length < 10 || phoneClean.length > 15) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid phone number format'
+                });
+            }
         }
 
         // Validate password strength
@@ -91,6 +102,7 @@ exports.register = async (req, res) => {
             name,
             email: email.toLowerCase(),
             password: password,
+            phone: phone ? phone.replace(/\D/g, '') : undefined,
             userType: finalUserType,
             subscription: {
                 tier: subscriptionTier,
@@ -528,6 +540,153 @@ exports.resetPassword = async (req, res) => {
 
     } catch (error) {
         console.error('Password reset error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error during password reset'
+        });
+    }
+};
+
+// ============================================
+// REQUEST PASSWORD RESET VIA SMS (Twilio Verify)
+// ============================================
+exports.resetPasswordSmsRequest = async (req, res) => {
+    try {
+        const { phone } = req.body;
+
+        if (!phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        // Clean phone number
+        const phoneClean = phone.replace(/\D/g, '');
+
+        // Find user by phone
+        const user = await User.findOne({ phone: phoneClean });
+        const successMessage = 'If that phone number is registered, a reset code has been sent';
+
+        if (!user) {
+            return res.json({
+                success: true,
+                message: successMessage
+            });
+        }
+
+        if (!twilioClient || !VERIFY_SERVICE_SID) {
+            return res.status(500).json({
+                success: false,
+                message: 'SMS service not configured'
+            });
+        }
+
+        try {
+            // Format phone for Twilio (needs +1 for US)
+            const formattedPhone = phoneClean.length === 10 ? `+1${phoneClean}` : `+${phoneClean}`;
+
+            await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                .verifications
+                .create({ to: formattedPhone, channel: 'sms' });
+
+            console.log(`📱 SMS reset code sent to: ${formattedPhone}`);
+
+            res.json({
+                success: true,
+                message: successMessage,
+                phone: phoneClean.slice(-4) // Return last 4 digits for UI
+            });
+        } catch (twilioError) {
+            console.error('Twilio SMS error:', twilioError.message);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to send SMS. Please try email reset instead.'
+            });
+        }
+
+    } catch (error) {
+        console.error('SMS reset request error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error processing reset request'
+        });
+    }
+};
+
+// ============================================
+// VERIFY SMS CODE AND RESET PASSWORD
+// ============================================
+exports.resetPasswordSmsVerify = async (req, res) => {
+    try {
+        const { phone, code, newPassword } = req.body;
+
+        if (!phone || !code || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone, code, and new password are required'
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 6 characters long'
+            });
+        }
+
+        const phoneClean = phone.replace(/\D/g, '');
+        const user = await User.findOne({ phone: phoneClean });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid phone number'
+            });
+        }
+
+        if (!twilioClient || !VERIFY_SERVICE_SID) {
+            return res.status(500).json({
+                success: false,
+                message: 'SMS service not configured'
+            });
+        }
+
+        try {
+            const formattedPhone = phoneClean.length === 10 ? `+1${phoneClean}` : `+${phoneClean}`;
+
+            const verification = await twilioClient.verify.v2.services(VERIFY_SERVICE_SID)
+                .verificationChecks
+                .create({ to: formattedPhone, code: code });
+
+            if (verification.status !== 'approved') {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid verification code'
+                });
+            }
+        } catch (twilioError) {
+            console.error('Twilio verify error:', twilioError.message);
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid or expired verification code'
+            });
+        }
+
+        // Code verified - reset password
+        user.password = newPassword; // Will be hashed by pre-save hook
+        user.phoneVerified = true; // Mark phone as verified since they proved ownership
+        await user.save();
+
+        console.log(`✅ Password reset via SMS for: ${user.email}`);
+
+        res.json({
+            success: true,
+            message: 'Password reset successful. You can now login with your new password.'
+        });
+
+    } catch (error) {
+        console.error('SMS reset verify error:', error);
         res.status(500).json({
             success: false,
             message: 'Server error during password reset'

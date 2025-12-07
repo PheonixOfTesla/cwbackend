@@ -20,13 +20,19 @@ router.post('/verify-login', authController.verifyLogin);
 // Resend verification code
 router.post('/resend-verification', authController.resendVerification);
 
-// Request password reset (sends reset code)
+// Request password reset via EMAIL (sends reset code)
 router.post('/reset-password', authController.resetPasswordRequest);
+
+// Request password reset via SMS (Twilio Verify)
+router.post('/reset-password-sms', authController.resetPasswordSmsRequest);
+
+// Verify SMS code and reset password
+router.post('/reset-password-sms/verify', authController.resetPasswordSmsVerify);
 
 // Debug: Check Twilio status
 router.get('/twilio-status', authController.twilioStatus);
 
-// Reset password with code
+// Reset password with code (email flow)
 router.put('/reset-password/:resetToken', authController.resetPassword);
 
 // ============================================

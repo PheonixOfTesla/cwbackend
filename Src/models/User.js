@@ -94,8 +94,15 @@ const userSchema = new mongoose.Schema({
   // Profile
   phone: {
     type: String,
-    sparse: true
+    sparse: true,
+    index: true
   },
+  phoneVerified: {
+    type: Boolean,
+    default: false
+  },
+  phoneVerificationCode: String,
+  phoneVerificationExpires: Date,
   dateOfBirth: {
     type: Date
   },
@@ -411,6 +418,8 @@ userSchema.methods.toJSON = function() {
   delete obj.password;
   delete obj.resetPasswordCode;
   delete obj.resetPasswordExpires;
+  delete obj.phoneVerificationCode;
+  delete obj.phoneVerificationExpires;
 
   if (!obj.wearableConnections) {
     obj.wearableConnections = [];
