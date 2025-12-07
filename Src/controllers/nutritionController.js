@@ -202,6 +202,24 @@ exports.generateMealPlan = async (req, res) => {
     const { calories, protein, carbs, fat } = nutrition.targets;
     const preferences = nutrition.preferences || {};
 
+    // ═══════════════════════════════════════════════════════════
+    // FORGE PERSONALIZATION: Pull from user's onboarding data
+    // ═══════════════════════════════════════════════════════════
+    const dietaryPrefs = user?.dietaryPreferences || {};
+    const bodyComp = user?.bodyComposition || {};
+
+    // Determine caloric strategy
+    const calorieStrategy = bodyComp.goal?.includes('cut') ? 'CALORIC DEFICIT - prioritize volume, fiber, satiety' :
+                           bodyComp.goal?.includes('bulk') ? 'CALORIC SURPLUS - prioritize calorie-dense foods' :
+                           'MAINTENANCE';
+
+    // Build exclusion list
+    const exclusions = [
+      ...(dietaryPrefs.allergies || []),
+      ...(dietaryPrefs.dislikedFoods || []),
+      ...(preferences.allergies || [])
+    ].filter(Boolean);
+
     const prompt = `You are FORGE Kitchen - the nutrition wing of ClockWork fitness AI.
 
 Generate a daily meal plan for this user:
@@ -212,12 +230,34 @@ TARGETS:
 - Carbs: ${carbs}g
 - Fat: ${fat}g
 
-PREFERENCES:
-- Dietary restrictions: ${preferences.dietaryRestrictions?.join(', ') || 'None'}
-- Allergies: ${preferences.allergies?.join(', ') || 'None'}
-- Cooking skill: ${preferences.cookingSkill || 'intermediate'}
-- Max prep time: ${preferences.prepTimeMax || 30} minutes per meal
-- Budget: ${preferences.budget || 'moderate'}
+═══════════════════════════════════════════════════════════
+DIETARY REQUIREMENTS (MUST FOLLOW EXACTLY):
+═══════════════════════════════════════════════════════════
+- Diet Type: ${dietaryPrefs.dietType || 'flexible'}
+- ALLERGIES (ABSOLUTELY NO): ${dietaryPrefs.allergies?.join(', ') || 'none'}
+- FOODS TO EXCLUDE: ${exclusions.join(', ') || 'none'}
+- Preferred Cuisines: ${dietaryPrefs.cuisinePreferences?.join(', ') || 'any'}
+- Cooking Skill: ${dietaryPrefs.cookingSkill || preferences.cookingSkill || 'intermediate'}
+- Meals Per Day: ${dietaryPrefs.mealsPerDay || 5}
+- Budget: ${dietaryPrefs.budget || preferences.budget || 'moderate'}
+- Max Prep Time: ${preferences.prepTimeMax || 30} minutes
+
+BODY COMPOSITION GOAL: ${bodyComp.goal || 'maintain'}
+CALORIE STRATEGY: ${calorieStrategy}
+
+═══════════════════════════════════════════════════════════
+CRITICAL RULES - VIOLATION = FAILURE:
+═══════════════════════════════════════════════════════════
+1. If diet type is 'vegan' → ZERO animal products (no meat, fish, eggs, dairy, honey)
+2. If diet type is 'vegetarian' → NO meat or fish, dairy and eggs OK
+3. If diet type is 'pescatarian' → NO meat, fish is OK
+4. If diet type is 'keto' → Less than 20g net carbs total
+5. If allergies include 'nuts' → ZERO nuts, nut butters, or nut oils in ANY meal
+6. If allergies include 'gluten' → ZERO wheat, barley, rye, or gluten-containing ingredients
+7. If allergies include 'dairy' → ZERO milk, cheese, yogurt, butter, cream
+8. If allergies include 'shellfish' → ZERO shrimp, crab, lobster, etc.
+9. If allergies include 'eggs' → ZERO eggs in any form
+10. NEVER include foods from the exclusion list
 
 Generate 5 meals (breakfast, morning snack, lunch, afternoon snack, dinner) that hit these macros.
 

@@ -186,35 +186,88 @@ exports.generateProgram = async (req, res) => {
       });
     }
 
-    // Build context for AI
-    const userContext = {
-      name: user.name,
-      experience: user.experience,
-      primaryGoal: user.primaryGoal,
-      schedule: user.schedule,
-      equipment: user.equipment,
-      limitations: user.limitations,
-      aiCoachContext: aiCoach.aiContext
-    };
+    // ═══════════════════════════════════════════════════════════
+    // FORGE PERSONALIZATION: Pull ALL user data
+    // ═══════════════════════════════════════════════════════════
+    const exercisePrefs = user.exercisePreferences || {};
+    const bodyComp = user.bodyComposition || {};
+    const compPrep = user.competitionPrep || {};
+    const lifestyle = user.lifestyle || {};
 
-    const prompt = `You are an elite fitness coach AI for ClockWork. Generate a ${duration || '4-week'} training program.
+    // Determine if cardio is needed
+    const needsCardio = bodyComp.goal?.includes('cut') ||
+                        (bodyComp.targetWeight && user.profile?.currentWeight > bodyComp.targetWeight);
 
+    // Determine periodization phase from competition prep
+    let periodizationPhase = 'general';
+    if (compPrep.isCompeting && compPrep.nextCompetitionDate) {
+      const weeksOut = Math.ceil((new Date(compPrep.nextCompetitionDate) - new Date()) / (7 * 24 * 60 * 60 * 1000));
+      if (weeksOut <= 2) periodizationPhase = 'peaking';
+      else if (weeksOut <= 4) periodizationPhase = 'intensity';
+      else if (weeksOut <= 8) periodizationPhase = 'strength';
+      else periodizationPhase = 'accumulation';
+    }
+
+    // Build exclusion list
+    const exercisesToExclude = [
+      ...(exercisePrefs.hatedExercises || []),
+      ...(user.limitations?.exercisesToAvoid || []),
+      ...(user.limitations?.injuries?.map(i => i.bodyPart) || [])
+    ].filter(Boolean);
+
+    const prompt = `You are FORGE - the elite AI coach for ClockWork. Generate a ${duration || '4-week'} training program.
+
+═══════════════════════════════════════════════════════════
 USER PROFILE:
-- Name: ${userContext.name}
-- Experience Level: ${userContext.experience?.level || 'beginner'}
-- Primary Discipline: ${userContext.experience?.primaryDiscipline || 'general-fitness'}
-- Goal: ${userContext.primaryGoal?.type || 'general-health'}
-- Days per week: ${userContext.schedule?.daysPerWeek || 3}
-- Session duration: ${userContext.schedule?.sessionDuration || 60} minutes
-- Equipment: ${userContext.equipment?.availableEquipment?.join(', ') || 'basic gym'}
-- Injuries to avoid: ${userContext.limitations?.injuries?.map(i => i.bodyPart).join(', ') || 'none'}
+═══════════════════════════════════════════════════════════
+- Name: ${user.name}
+- Experience Level: ${user.experience?.level || 'intermediate'}
+- Years Training: ${user.experience?.yearsTraining || 1}
+- Primary Discipline: ${user.experience?.primaryDiscipline || 'general-fitness'}
+- Goal: ${user.primaryGoal?.type || 'general-health'}
+- Days per week: ${user.schedule?.daysPerWeek || 4}
+- Session duration: ${user.schedule?.sessionDuration || 60} minutes
+- Preferred days: ${user.schedule?.preferredDays?.join(', ') || 'flexible'}
+- Equipment: ${user.equipment?.availableEquipment?.join(', ') || 'full gym'}
 
-AI COACH PREFERENCES:
-- Communication style: ${aiCoach.communicationStyle}
-- Program style: ${aiCoach.trainingPhilosophy?.programStyle}
-- Volume preference: ${aiCoach.trainingPhilosophy?.volumePreference}
-- Favorite exercises: ${aiCoach.preferences?.favoriteExercises?.join(', ') || 'none specified'}
-- Exercises to avoid: ${aiCoach.preferences?.avoidExercises?.join(', ') || 'none'}
+═══════════════════════════════════════════════════════════
+EXERCISE PREFERENCES (CRITICAL):
+═══════════════════════════════════════════════════════════
+- FAVORITE exercises (include these): ${exercisePrefs.favoriteExercises?.join(', ') || 'any compound movements'}
+- HATED exercises (NEVER include): ${exercisesToExclude.join(', ') || 'none'}
+- Training style: ${exercisePrefs.trainingStyle || 'balanced'}
+- Preferred split: ${exercisePrefs.preferredSplit || 'upper/lower'}
+- Cardio preference: ${exercisePrefs.cardioPreference || 'minimal'}
+
+═══════════════════════════════════════════════════════════
+BODY COMPOSITION:
+═══════════════════════════════════════════════════════════
+- Current weight: ${bodyComp.currentWeight || user.profile?.currentWeight || 'not specified'}
+- Target weight: ${bodyComp.targetWeight || 'maintain'}
+- Goal: ${bodyComp.goal || 'maintain'}
+${needsCardio ? `⚠️ USER IS CUTTING - INCLUDE CARDIO IN PROGRAM
+   - Type: ${exercisePrefs.cardioPreference || 'LISS'}
+   - Frequency: 3-4x per week
+   - Duration: 20-30 min post-workout` : ''}
+
+${compPrep.isCompeting ? `
+═══════════════════════════════════════════════════════════
+COMPETITION PREP:
+═══════════════════════════════════════════════════════════
+- Competition Date: ${compPrep.nextCompetitionDate}
+- Federation: ${compPrep.federation || 'not specified'}
+- Weight Class: ${compPrep.weightClass || 'not specified'}
+- Current Phase: ${periodizationPhase.toUpperCase()}
+- Events: ${compPrep.events?.join(', ') || 'SBD'}
+` : ''}
+
+═══════════════════════════════════════════════════════════
+LIFESTYLE FACTORS:
+═══════════════════════════════════════════════════════════
+- Job activity: ${lifestyle.jobActivity || 'moderate'}
+- Stress level: ${lifestyle.stressLevel || 'moderate'}
+- Sleep: ${lifestyle.sleepHours || 7} hours/night
+${lifestyle.stressLevel === 'high' ? '⚠️ HIGH STRESS - Reduce volume, focus on recovery' : ''}
 
 TRAINING HISTORY:
 - Total workouts completed: ${aiCoach.trainingHistory?.totalWorkouts || 0}
