@@ -1,59 +1,89 @@
-// Src/utils/email.js - Send codes via Twilio SMS
-const twilio = require('twilio');
+// Src/utils/email.js - ClockWork Email Service (Resend)
+const { passwordResetTemplate } = require('../templates/emails/passwordReset');
+const { welcomeTemplate } = require('../templates/emails/welcome');
 
-let twilioClient = null;
-const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const FROM_EMAIL = process.env.FROM_EMAIL || 'ClockWork <onboarding@resend.dev>';
 
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_ACCOUNT_SID.startsWith('AC')) {
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    console.log('✅ Twilio SMS ready');
+// Log email config on startup
+if (RESEND_API_KEY) {
+    console.log('✅ Resend email service ready');
+} else {
+    console.log('⚠️ RESEND_API_KEY not set - emails will be logged only');
 }
 
-// Send SMS with code
-const sendSMS = async (to, message) => {
-    if (!twilioClient || !twilioPhone) {
-        console.log(`📱 [SMS NOT CONFIGURED] To: ${to}, Message: ${message}`);
-        return false;
-    }
-    try {
-        await twilioClient.messages.create({
-            body: message,
-            from: twilioPhone,
-            to: to
-        });
-        console.log(`📱 SMS sent to: ${to}`);
+/**
+ * Send email via Resend API
+ */
+const sendEmail = async (to, subject, html) => {
+    // Always log for debugging
+    console.log(`📧 [EMAIL] To: ${to}, Subject: ${subject}`);
+
+    if (!RESEND_API_KEY) {
+        console.log('📧 [RESEND NOT CONFIGURED] Email logged but not sent');
         return true;
+    }
+
+    try {
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: FROM_EMAIL,
+                to: to,
+                subject: subject,
+                html: html
+            })
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText);
+        }
+
+        const data = await res.json();
+        console.log(`✅ Email sent successfully: ${data.id}`);
+        return true;
+
     } catch (error) {
-        console.error('SMS error:', error.message);
+        console.error('❌ Email send error:', error.message);
         return false;
     }
 };
 
-// For password reset - send SMS if phone available, otherwise log
-const sendPasswordResetCode = async (email, code, phone = null) => {
-    console.log(`🔐 PASSWORD RESET CODE for ${email}: ${code}`);
-
-    // If user has phone and Twilio is configured, send SMS
-    if (phone && twilioClient && twilioPhone) {
-        try {
-            await twilioClient.messages.create({
-                body: `Your ClockWork password reset code is: ${code}. Valid for 10 minutes.`,
-                from: twilioPhone,
-                to: phone
-            });
-            console.log(`📱 Password reset SMS sent to: ${phone}`);
-            return true;
-        } catch (error) {
-            console.error('SMS error:', error.message);
-        }
-    }
-
-    return true; // Return true so flow continues
+/**
+ * Send password reset code email
+ */
+const sendPasswordResetCode = async (email, code) => {
+    const html = passwordResetTemplate(code);
+    const subject = `Your ClockWork Reset Code: ${code}`;
+    return sendEmail(email, subject, html);
 };
 
+/**
+ * Send verification code email (for login 2FA if enabled)
+ */
 const sendVerificationCode = async (email, code) => {
-    console.log(`🔐 VERIFICATION CODE for ${email}: ${code}`);
-    return true;
+    const html = passwordResetTemplate(code); // Reuse template
+    const subject = `Your ClockWork Verification Code: ${code}`;
+    return sendEmail(email, subject, html);
 };
 
-module.exports = { sendSMS, sendPasswordResetCode, sendVerificationCode };
+/**
+ * Send welcome email on registration
+ */
+const sendWelcomeEmail = async (email, name) => {
+    const html = welcomeTemplate(name, 24); // 24-hour trial
+    const subject = 'Welcome to ClockWork';
+    return sendEmail(email, subject, html);
+};
+
+module.exports = {
+    sendEmail,
+    sendPasswordResetCode,
+    sendVerificationCode,
+    sendWelcomeEmail
+};

@@ -4,7 +4,7 @@ const AICoach = require('../models/AICoach');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { sendVerificationCode, sendPasswordResetCode } = require('../utils/email');
+const { sendVerificationCode, sendPasswordResetCode, sendWelcomeEmail } = require('../utils/email');
 
 // Twilio Verify for email verification (with validation)
 const twilio = require('twilio');
@@ -116,6 +116,11 @@ exports.register = async (req, res) => {
         );
 
         console.log(`✅ New ${finalUserType} registered with 24h trial: ${email}`);
+
+        // Send welcome email (async, don't block response)
+        sendWelcomeEmail(email.toLowerCase(), name).catch(err => {
+            console.error('Welcome email failed:', err.message);
+        });
 
         res.status(201).json({
             success: true,
@@ -441,8 +446,8 @@ exports.resetPasswordRequest = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
         await user.save();
 
-        // Send password reset code via SMS (if phone available) or log
-        await sendPasswordResetCode(email.toLowerCase(), resetCode, user.phone);
+        // Send password reset code via email
+        await sendPasswordResetCode(email.toLowerCase(), resetCode);
 
         res.json({
             success: true,
