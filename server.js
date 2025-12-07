@@ -174,6 +174,9 @@ const wearableRoutes = require('./Src/routes/wearables');
 // Billing
 const subscriptionRoutes = require('./Src/routes/subscriptions');
 
+// Habits
+const habitRoutes = require('./Src/routes/habits');
+
 // Testing
 const testRoutes = require('./Src/routes/test');
 
@@ -211,6 +214,9 @@ app.use('/api/wearables', wearableRoutes);
 
 // Billing
 app.use('/api/subscriptions', subscriptionRoutes);
+
+// Habits
+app.use('/api/habits', habitRoutes);
 
 // Testing
 app.use('/api/tests', testRoutes);

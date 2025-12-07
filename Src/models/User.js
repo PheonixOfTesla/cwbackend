@@ -262,6 +262,156 @@ const userSchema = new mongoose.Schema({
     exercisesToAvoid: [String]
   },
 
+  // ═══════════════════════════════════════════════════════════
+  // DIETARY PREFERENCES (GOD TIER PERSONALIZATION)
+  // ═══════════════════════════════════════════════════════════
+  dietaryPreferences: {
+    dietType: {
+      type: String,
+      enum: ['omnivore', 'vegetarian', 'vegan', 'pescatarian', 'keto', 'paleo', 'mediterranean', 'flexible', 'halal', 'kosher']
+    },
+    allergies: [String],
+    intolerances: [String],
+    dislikedFoods: [String],
+    cuisinePreferences: [{
+      type: String,
+      enum: ['american', 'mexican', 'italian', 'asian', 'mediterranean', 'indian', 'middle-eastern', 'african', 'caribbean']
+    }],
+    cookingSkill: {
+      type: String,
+      enum: ['none', 'basic', 'intermediate', 'advanced']
+    },
+    mealPrepTime: {
+      type: String,
+      enum: ['minimal', 'moderate', 'extensive']
+    },
+    budget: {
+      type: String,
+      enum: ['tight', 'moderate', 'flexible']
+    },
+    mealsPerDay: { type: Number, default: 4, min: 2, max: 8 }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // EXERCISE PREFERENCES (GOD TIER PERSONALIZATION)
+  // ═══════════════════════════════════════════════════════════
+  exercisePreferences: {
+    favoriteExercises: [String],
+    hatedExercises: [String],
+    cardioPreference: {
+      type: String,
+      enum: ['none', 'liss', 'hiit', 'sports', 'mixed']
+    },
+    cardioActivities: [{
+      type: String,
+      enum: ['walking', 'running', 'cycling', 'swimming', 'rowing', 'stairmaster', 'elliptical', 'jump-rope', 'hiking', 'sports']
+    }],
+    mobilityFocus: [{
+      type: String,
+      enum: ['hips', 'shoulders', 'ankles', 'thoracic', 'wrists', 'neck', 'lower-back', 'hamstrings']
+    }],
+    preferredSplit: {
+      type: String,
+      enum: ['full-body', 'upper-lower', 'ppl', 'bro-split', 'sport-specific', 'ai-decides']
+    },
+    trainingStyle: {
+      type: String,
+      enum: ['strength-focused', 'hypertrophy-focused', 'functional', 'athletic', 'balanced']
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // BODY COMPOSITION GOALS (GOD TIER PERSONALIZATION)
+  // ═══════════════════════════════════════════════════════════
+  bodyComposition: {
+    currentWeight: Number,
+    targetWeight: Number,
+    currentBodyFat: Number,
+    targetBodyFat: Number,
+    goal: {
+      type: String,
+      enum: ['aggressive-cut', 'moderate-cut', 'slow-cut', 'maintain', 'lean-bulk', 'bulk', 'recomp']
+    },
+    weeklyWeightChangeTarget: Number,
+    deadline: Date,
+    weightCutStrategy: {
+      type: String,
+      enum: ['water-manipulation', 'gradual', 'peak-week', 'none']
+    },
+    startDate: Date,
+    startWeight: Number
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // LIFESTYLE FACTORS (GOD TIER PERSONALIZATION)
+  // ═══════════════════════════════════════════════════════════
+  lifestyle: {
+    jobType: {
+      type: String,
+      enum: ['sedentary', 'lightly-active', 'moderately-active', 'very-active', 'extremely-active']
+    },
+    stressLevel: {
+      type: String,
+      enum: ['low', 'moderate', 'high', 'very-high']
+    },
+    sleepHours: Number,
+    sleepQuality: {
+      type: String,
+      enum: ['poor', 'fair', 'good', 'excellent']
+    },
+    hobbies: [String],
+    otherActivities: [String],
+    workSchedule: {
+      type: String,
+      enum: ['9-5', 'shift-work', 'remote', 'travel-heavy', 'irregular', 'student']
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // COMPETITION PREP (GOD TIER - PL/BB/CROSSFIT/OLY)
+  // ═══════════════════════════════════════════════════════════
+  competitionPrep: {
+    isCompeting: { type: Boolean, default: false },
+    sport: {
+      type: String,
+      enum: ['powerlifting', 'bodybuilding', 'crossfit', 'olympic-weightlifting', 'strongman', 'physique', 'bikini', 'classic-physique', 'marathon', 'triathlon', 'mma', 'wrestling', 'other']
+    },
+    federation: String,
+    meetDate: Date,
+    meetName: String,
+    meetLocation: String,
+    currentWeightClass: String,
+    targetWeightClass: String,
+    qualifyingTotal: Number,
+    currentTotal: Number,
+    bestTotal: Number,
+    weighInType: {
+      type: String,
+      enum: ['2-hour', '24-hour', 'same-day']
+    },
+    divisionAge: String,
+    divisionExperience: {
+      type: String,
+      enum: ['open', 'junior', 'sub-junior', 'masters-1', 'masters-2', 'masters-3', 'masters-4', 'novice']
+    },
+    equipped: { type: Boolean, default: false },
+    previousMeets: [{
+      date: Date,
+      meetName: String,
+      total: Number,
+      weightClass: String,
+      placement: Number,
+      squat: Number,
+      bench: Number,
+      deadlift: Number,
+      bombedOut: { type: Boolean, default: false }
+    }],
+    attemptSelectionPreference: {
+      type: String,
+      enum: ['conservative', 'moderate', 'aggressive']
+    }
+  },
+
   // Onboarding Status
   onboarding: {
     completed: {

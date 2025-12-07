@@ -3,6 +3,8 @@
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
 const Anthropic = require('@anthropic-ai/sdk');
+const recoveryService = require('../services/recoveryService');
+const prDetectionService = require('../services/prDetectionService');
 
 // Initialize Anthropic (Claude) - primary and ONLY AI provider
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -293,7 +295,7 @@ Return as JSON with this structure:
 };
 
 // ============================================
-// GENERATE SINGLE WORKOUT
+// GENERATE SINGLE WORKOUT (With Recovery Autoregulation)
 // ============================================
 exports.generateWorkout = async (req, res) => {
   try {
@@ -313,22 +315,66 @@ exports.generateWorkout = async (req, res) => {
       });
     }
 
+    // Get recovery/readiness data for autoregulation
+    const readiness = await recoveryService.getTrainingReadiness(userId);
+    const intensityModifier = readiness.intensityModifier || 1.0;
+    const recoveryRecommendation = readiness.recommendation || 'full-intensity';
+
+    // Get exercise preferences
+    const exercisePrefs = user.exercisePreferences || {};
+    const bodyComp = user.bodyComposition || {};
+    const needsCardio = bodyComp.goal?.includes('cut') || (bodyComp.targetWeight && user.profile?.currentWeight > bodyComp.targetWeight);
+
     const prompt = `Generate a single ${duration || 60}-minute ${focus || 'full body'} workout.
 
-User profile:
-- Experience: ${user.experience?.level || 'beginner'}
+═══════════════════════════════════════════════════════════
+RECOVERY-ADJUSTED WORKOUT GENERATION
+═══════════════════════════════════════════════════════════
+
+TODAY'S READINESS:
+- Recovery Score: ${readiness.readinessScore || 70}/100
+- Recommendation: ${recoveryRecommendation}
+- Intensity Modifier: ${(intensityModifier * 100).toFixed(0)}%
+${readiness.factorSummary ? `- Factors: ${readiness.factorSummary}` : ''}
+${readiness.explanation ? `- Note: ${readiness.explanation}` : ''}
+
+USER PROFILE:
+- Name: ${user.name}
+- Experience: ${user.experience?.level || 'intermediate'}
+- Discipline: ${user.experience?.primaryDiscipline || 'general-fitness'}
 - Equipment available: ${equipment || user.equipment?.availableEquipment?.join(', ') || 'full gym'}
-- Exercises to avoid: ${user.limitations?.exercisesToAvoid?.join(', ') || 'none'}
-- AI preferences: ${aiCoach.preferences?.favoriteExercises?.join(', ') || 'any'}
+
+EXERCISE PREFERENCES:
+- Favorite exercises: ${exercisePrefs.favoriteExercises?.join(', ') || 'any'}
+- AVOID: ${[...(exercisePrefs.hatedExercises || []), ...(user.limitations?.exercisesToAvoid || [])].join(', ') || 'none'}
+- Cardio preference: ${exercisePrefs.cardioPreference || 'mixed'}
+- Training style: ${exercisePrefs.trainingStyle || 'balanced'}
+
+${needsCardio ? `
+⚠️ INCLUDE CARDIO - User is cutting weight
+- Type: ${exercisePrefs.cardioPreference || 'LISS'}
+- Duration: 15-25 min post-workout
+` : ''}
+
+ADJUSTMENTS FOR TODAY:
+${recoveryRecommendation === 'push-hard' ? '- Recovery is excellent - push intensity, consider adding volume' : ''}
+${recoveryRecommendation === 'moderate-intensity' ? '- Recovery is moderate - reduce top sets by 5-10%' : ''}
+${recoveryRecommendation === 'reduce-volume' ? '- Low recovery - reduce volume by 25%, focus on technique' : ''}
+${recoveryRecommendation === 'active-recovery' ? '- Poor recovery - light mobility work only, or full rest' : ''}
+${recoveryRecommendation === 'full-intensity' ? '- Normal recovery - train as planned' : ''}
 
 Return JSON:
 {
   "workoutName": "string",
+  "recoveryAdjusted": ${recoveryRecommendation !== 'full-intensity'},
+  "intensityLevel": "${recoveryRecommendation}",
   "warmup": [{"exercise": "string", "duration": "string"}],
-  "mainWorkout": [{"exercise": "string", "sets": number, "reps": "string", "rest": "string", "notes": "string"}],
+  "mainWorkout": [{"exercise": "string", "sets": number, "reps": "string", "rpe": number, "rest": "string", "notes": "string"}],
+  ${needsCardio ? '"cardio": {"type": "string", "duration": "string", "intensity": "string"},' : ''}
   "cooldown": [{"exercise": "string", "duration": "string"}],
   "estimatedDuration": number,
-  "difficulty": "beginner|intermediate|advanced"
+  "difficulty": "beginner|intermediate|advanced",
+  "coachingNote": "string - personalized note based on their recovery"
 }`;
 
     // Use AI with automatic fallback
