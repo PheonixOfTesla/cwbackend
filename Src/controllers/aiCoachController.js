@@ -277,6 +277,8 @@ TRAINING HISTORY:
 ${focus ? `FOCUS AREA: ${focus}` : ''}
 ${intensity ? `INTENSITY LEVEL: ${intensity}` : ''}
 
+IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
+
 Generate a structured program with:
 1. Program overview and goals
 2. Weekly structure
@@ -313,6 +315,12 @@ Return as JSON with this structure:
       }
     } catch (e) {
       program = { raw: programText };
+    }
+
+    // CRITICAL FIX: Enrich all workouts in program with exercise library links
+    if (program.workouts && Array.isArray(program.workouts)) {
+      program.workouts = program.workouts.map(workout => enrichWorkoutWithLinks(workout));
+      console.log('[FORGE] Enriched program workouts with exercise library links');
     }
 
     // Update AI coach stats
@@ -416,6 +424,8 @@ ${recoveryRecommendation === 'reduce-volume' ? '- Low recovery - reduce volume b
 ${recoveryRecommendation === 'active-recovery' ? '- Poor recovery - light mobility work only, or full rest' : ''}
 ${recoveryRecommendation === 'full-intensity' ? '- Normal recovery - train as planned' : ''}
 
+IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
+
 Return JSON:
 {
   "workoutName": "string",
@@ -448,6 +458,10 @@ Return JSON:
       workout = { raw: workoutText };
     }
 
+    // CRITICAL FIX: Enrich workout with exercise library links
+    workout = enrichWorkoutWithLinks(workout);
+    console.log('[FORGE] Enriched workout with exercise library links');
+
     await aiCoach.incrementQueryCount();
 
     res.json({
@@ -473,6 +487,51 @@ Return JSON:
 // ACTION DETECTION HELPERS
 // ============================================
 const CalendarEvent = require('../models/CalendarEvent');
+const { ALL_EXERCISES } = require('../data/exerciseLibrary');
+
+// Helper: Match exercise name to library ID for video links
+function matchExerciseToLibrary(exerciseName) {
+  if (!exerciseName || !ALL_EXERCISES) return null;
+
+  const nameLower = exerciseName.toLowerCase().trim();
+
+  // Direct name match
+  let match = ALL_EXERCISES.find(ex => ex.name && ex.name.toLowerCase() === nameLower);
+  if (match) return { id: match.id, name: match.name, videoUrl: `/exercises/library/${match.id}` };
+
+  // Fuzzy match - check if library exercise name is contained in user's exercise name or vice versa
+  match = ALL_EXERCISES.find(ex => {
+    if (!ex.name) return false;
+    const libName = ex.name.toLowerCase();
+    return nameLower.includes(libName) || libName.includes(nameLower);
+  });
+
+  if (match) return { id: match.id, name: match.name, videoUrl: `/exercises/library/${match.id}` };
+
+  // No match found - log for debugging
+  console.log(`[FORGE] No exercise match found for: "${exerciseName}"`);
+  return null;
+}
+
+// Helper: Enrich workout with exercise links
+function enrichWorkoutWithLinks(workout) {
+  if (!workout || !workout.mainWorkout) return workout;
+
+  workout.mainWorkout = workout.mainWorkout.map(exercise => {
+    const match = matchExerciseToLibrary(exercise.exercise);
+    if (match) {
+      return {
+        ...exercise,
+        exerciseId: match.id,
+        videoUrl: match.videoUrl,
+        libraryName: match.name
+      };
+    }
+    return exercise;
+  });
+
+  return workout;
+}
 
 // Detect if user is asking FORGE to DO something
 function detectActionIntent(question) {
@@ -540,10 +599,36 @@ exports.askCoach = async (req, res) => {
         const weekStart = new Date();
         weekStart.setHours(0, 0, 0, 0);
 
+        // CRITICAL FIX: Parse days from the user's message
+        const questionLower = question.toLowerCase();
+        const dayNamesMap = {
+          'monday': 'monday', 'mon': 'monday',
+          'tuesday': 'tuesday', 'tue': 'tuesday', 'tues': 'tuesday',
+          'wednesday': 'wednesday', 'wed': 'wednesday',
+          'thursday': 'thursday', 'thu': 'thursday', 'thur': 'thursday', 'thurs': 'thursday',
+          'friday': 'friday', 'fri': 'friday',
+          'saturday': 'saturday', 'sat': 'saturday',
+          'sunday': 'sunday', 'sun': 'sunday'
+        };
+
+        // Extract days mentioned in the conversation
+        const mentionedDays = [];
+        Object.keys(dayNamesMap).forEach(key => {
+          if (questionLower.includes(key)) {
+            const dayName = dayNamesMap[key];
+            if (!mentionedDays.includes(dayName)) {
+              mentionedDays.push(dayName);
+            }
+          }
+        });
+
         // Build simple program based on user profile
-        const daysPerWeek = user.schedule?.daysPerWeek || 4;
-        const preferredDays = user.schedule?.preferredDays || ['monday', 'tuesday', 'thursday', 'friday'];
+        const daysPerWeek = mentionedDays.length || user.schedule?.daysPerWeek || 4;
+        // PRIORITY: Use days from conversation, fallback to profile
+        const preferredDays = mentionedDays.length > 0 ? mentionedDays : (user.schedule?.preferredDays || ['monday', 'tuesday', 'thursday', 'friday']);
         const goal = user.primaryGoal?.type || 'general-health';
+
+        console.log(`[FORGE] Using days: ${preferredDays.join(', ')} (${mentionedDays.length > 0 ? 'from conversation' : 'from profile'})`);
 
         const workoutTemplates = {
           'build-strength': ['Heavy Squat Day', 'Heavy Bench Day', 'Heavy Deadlift Day', 'Accessories'],
