@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const exerciseSchema = new mongoose.Schema({
+    // Link to exercise library for video demonstrations
+    exerciseId: {
+        type: String,
+        trim: true,
+        index: true
+    },
     name: {
         type: String,
         required: [true, 'Exercise name is required'],

@@ -54,6 +54,16 @@ router.put('/clients/:clientId/notes', coachController.updateClientNotes);
 // GET /api/coach/clients/:clientId/progress - Get client progress
 router.get('/clients/:clientId/progress', coachController.getClientProgress);
 
+// ============================================
+// WORKOUT CREATION & ASSIGNMENT
+// ============================================
+
+// POST /api/coach/clients/:clientId/workouts - Create workout for client
+router.post('/clients/:clientId/workouts', coachController.createWorkout);
+
+// GET /api/coach/clients/:clientId/workouts - Get client's workouts
+router.get('/clients/:clientId/workouts', coachController.getClientWorkouts);
+
 // POST /api/coach/clients/:clientId/assign-program - Assign program to client
 router.post('/clients/:clientId/assign-program', coachController.assignProgram);
 

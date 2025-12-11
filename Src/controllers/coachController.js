@@ -1,6 +1,8 @@
 // Src/controllers/coachController.js - Coach Management Controller
 const User = require('../models/User');
 const CoachClient = require('../models/CoachClient');
+const Workout = require('../models/Workout');
+const { ALL_EXERCISES } = require('../data/exerciseLibrary');
 const crypto = require('crypto');
 
 // ============================================
@@ -536,6 +538,148 @@ exports.getClientProgress = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get client progress',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// CREATE WORKOUT FOR CLIENT (with Exercise Library Integration)
+// ============================================
+exports.createWorkout = async (req, res) => {
+  try {
+    const coachId = req.user.id;
+    const { clientId } = req.params;
+    const { name, exercises, scheduledDate, notes } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can create workouts'
+      });
+    }
+
+    // Verify coach-client relationship
+    const relationship = await CoachClient.findOne({
+      coach: coachId,
+      client: clientId,
+      status: 'active'
+    });
+
+    if (!relationship) {
+      return res.status(403).json({
+        success: false,
+        message: 'No active relationship with this client'
+      });
+    }
+
+    // Enrich exercises with library data (video links)
+    const enrichedExercises = exercises.map(exercise => {
+      if (exercise.exerciseId && ALL_EXERCISES) {
+        const libraryExercise = ALL_EXERCISES.find(ex => ex.id === exercise.exerciseId);
+        if (libraryExercise) {
+          return {
+            ...exercise,
+            name: exercise.name || libraryExercise.name,
+            // Add library metadata for frontend use
+            _libraryData: {
+              id: libraryExercise.id,
+              name: libraryExercise.name,
+              videoUrl: `/exercises/library/${libraryExercise.id}`,
+              primary: libraryExercise.primary,
+              equipment: libraryExercise.equipment
+            }
+          };
+        }
+      }
+      return exercise;
+    });
+
+    const workout = await Workout.create({
+      name,
+      clientId,
+      createdBy: coachId,
+      assignedBy: coachId,
+      exercises: enrichedExercises,
+      scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+      notes: notes || ''
+    });
+
+    await workout.populate('clientId', 'name email');
+
+    res.status(201).json({
+      success: true,
+      message: 'Workout created and assigned to client',
+      workout: {
+        id: workout._id,
+        name: workout.name,
+        clientName: workout.clientId.name,
+        scheduledDate: workout.scheduledDate,
+        exerciseCount: workout.exercises.length,
+        exercises: workout.exercises
+      }
+    });
+
+  } catch (error) {
+    console.error('Create workout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create workout',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// GET CLIENT WORKOUTS
+// ============================================
+exports.getClientWorkouts = async (req, res) => {
+  try {
+    const coachId = req.user.id;
+    const { clientId } = req.params;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can access client workouts'
+      });
+    }
+
+    // Verify coach-client relationship
+    const relationship = await CoachClient.findOne({
+      coach: coachId,
+      client: clientId
+    });
+
+    if (!relationship) {
+      return res.status(403).json({
+        success: false,
+        message: 'No relationship with this client'
+      });
+    }
+
+    const workouts = await Workout.find({ clientId })
+      .sort({ scheduledDate: -1, createdAt: -1 })
+      .limit(50);
+
+    res.json({
+      success: true,
+      workouts: workouts.map(w => ({
+        id: w._id,
+        name: w.name,
+        scheduledDate: w.scheduledDate,
+        completed: w.completed,
+        completedDate: w.completedDate,
+        exerciseCount: w.exercises.length,
+        notes: w.notes
+      }))
+    });
+
+  } catch (error) {
+    console.error('Get client workouts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get client workouts',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
