@@ -1,11 +1,32 @@
-// Src/routes/coach.js - Coach Management Routes
+// Src/routes/coach.js - Coach Management Routes WITH RATE LIMITING
 const express = require('express');
 const router = express.Router();
 const coachController = require('../controllers/coachController');
 const { protect, requireCoach } = require('../middleware/auth');
+const { coachInviteLimiter } = require('../middleware/rateLimiter');
 
-// All routes require authentication
+// ============================================
+// PUBLIC ROUTES (No auth required)
+// ============================================
+
+// GET /api/coach/list - Get all coaches (for signup)
+router.get('/list', coachController.getCoachesList);
+
+// All routes below require authentication
 router.use(protect);
+
+// ============================================
+// COACH PROFILE
+// ============================================
+
+// GET /api/coach/profile - Get my coach profile
+router.get('/profile', coachController.getCoachProfile);
+
+// PUT /api/coach/profile - Update my coach profile
+router.put('/profile', coachController.updateCoachProfile);
+
+// POST /api/coach/profile/picture - Upload profile picture
+router.post('/profile/picture', coachController.uploadProfilePicture);
 
 // ============================================
 // COACH DASHBOARD
@@ -18,11 +39,11 @@ router.get('/dashboard', coachController.getDashboardStats);
 router.get('/clients', coachController.getMyClients);
 
 // ============================================
-// CLIENT MANAGEMENT
+// CLIENT MANAGEMENT (RATE LIMITED)
 // ============================================
 
-// POST /api/coach/invite - Invite a new client
-router.post('/invite', coachController.inviteClient);
+// POST /api/coach/invite - Invite a new client (RATE LIMITED: 10/hour)
+router.post('/invite', coachInviteLimiter, coachController.inviteClient);
 
 // DELETE /api/coach/clients/:clientId - Remove a client
 router.delete('/clients/:clientId', coachController.removeClient);

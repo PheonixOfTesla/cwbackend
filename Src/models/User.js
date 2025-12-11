@@ -53,6 +53,35 @@ const userSchema = new mongoose.Schema({
   },
 
   // ═══════════════════════════════════════════════════════════
+  // COACH PROFILE (only for coaches)
+  // ═══════════════════════════════════════════════════════════
+  coachProfile: {
+    specialty: {
+      type: String,
+      maxlength: 100,
+      default: ''
+    },
+    bio: {
+      type: String,
+      maxlength: 500,
+      default: ''
+    },
+    profilePicture: {
+      type: String,
+      default: ''
+    },
+    certifications: [{
+      name: String,
+      issuingOrganization: String,
+      year: Number
+    }],
+    experienceYears: {
+      type: Number,
+      default: 0
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
   // SUBSCRIPTION (Replaces gym-based billing)
   // ═══════════════════════════════════════════════════════════
   subscription: {

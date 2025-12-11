@@ -4,6 +4,171 @@ const CoachClient = require('../models/CoachClient');
 const crypto = require('crypto');
 
 // ============================================
+// GET COACHES LIST (Public - for signup)
+// ============================================
+exports.getCoachesList = async (req, res) => {
+  try {
+    const coaches = await User.find({
+      userType: 'coach',
+      isActive: true
+    })
+    .select('name email coachProfile')
+    .sort({ 'coachProfile.experienceYears': -1, createdAt: -1 })
+    .limit(100);
+
+    const coachList = coaches.map(coach => ({
+      _id: coach._id,
+      name: coach.name,
+      specialty: coach.coachProfile?.specialty || 'General Fitness',
+      bio: coach.coachProfile?.bio || '',
+      profilePicture: coach.coachProfile?.profilePicture || '',
+      experienceYears: coach.coachProfile?.experienceYears || 0
+    }));
+
+    res.json({
+      success: true,
+      coaches: coachList
+    });
+
+  } catch (error) {
+    console.error('Get coaches list error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get coaches list',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// GET COACH PROFILE
+// ============================================
+exports.getCoachProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can access this endpoint'
+      });
+    }
+
+    const user = await User.findById(userId).select('name email coachProfile userType subscription createdAt');
+
+    res.json({
+      success: true,
+      profile: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        userType: user.userType,
+        coachProfile: user.coachProfile,
+        subscription: user.subscription,
+        memberSince: user.createdAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Get coach profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get coach profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE COACH PROFILE
+// ============================================
+exports.updateCoachProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { specialty, bio, experienceYears, certifications } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update coach profile'
+      });
+    }
+
+    const updateData = {};
+    if (specialty !== undefined) updateData['coachProfile.specialty'] = specialty;
+    if (bio !== undefined) updateData['coachProfile.bio'] = bio;
+    if (experienceYears !== undefined) updateData['coachProfile.experienceYears'] = experienceYears;
+    if (certifications !== undefined) updateData['coachProfile.certifications'] = certifications;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('name email coachProfile');
+
+    res.json({
+      success: true,
+      message: 'Coach profile updated successfully',
+      profile: user
+    });
+
+  } catch (error) {
+    console.error('Update coach profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update coach profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPLOAD PROFILE PICTURE
+// ============================================
+exports.uploadProfilePicture = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { imageData } = req.body; // Base64 encoded image
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can upload profile pictures'
+      });
+    }
+
+    if (!imageData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image data is required'
+      });
+    }
+
+    // For now, store base64 directly
+    // TODO: In production, upload to S3/Cloudinary and store URL
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { 'coachProfile.profilePicture': imageData } },
+      { new: true }
+    ).select('coachProfile.profilePicture');
+
+    res.json({
+      success: true,
+      message: 'Profile picture uploaded successfully',
+      profilePicture: user.coachProfile.profilePicture
+    });
+
+  } catch (error) {
+    console.error('Upload profile picture error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload profile picture',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
 // GET MY CLIENTS
 // ============================================
 exports.getMyClients = async (req, res) => {
