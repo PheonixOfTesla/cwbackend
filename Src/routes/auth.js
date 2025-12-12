@@ -1,33 +1,39 @@
-// Src/routes/auth.js - COMPLETE VERSION
+// Src/routes/auth.js - COMPLETE VERSION WITH RATE LIMITING
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const authController = require('../controllers/authController');
+const {
+    registerLimiter,
+    loginLimiter,
+    otpLimiter,
+    passwordResetLimiter
+} = require('../middleware/rateLimiter');
 
 // ============================================
 // PUBLIC ROUTES (No authentication required)
 // ============================================
 
-// Register new user
-router.post('/register', authController.register);
+// Register new user (RATE LIMITED: 5/hour)
+router.post('/register', registerLimiter, authController.register);
 
-// Login existing user
-router.post('/login', authController.login);
+// Login existing user (RATE LIMITED: 10/15min)
+router.post('/login', loginLimiter, authController.login);
 
-// Verify login code (2FA via email)
-router.post('/verify-login', authController.verifyLogin);
+// Verify login code - 2FA via email (RATE LIMITED: 5/15min)
+router.post('/verify-login', otpLimiter, authController.verifyLogin);
 
-// Resend verification code
-router.post('/resend-verification', authController.resendVerification);
+// Resend verification code (RATE LIMITED: 5/15min)
+router.post('/resend-verification', otpLimiter, authController.resendVerification);
 
-// Request password reset via EMAIL (sends reset code)
-router.post('/reset-password', authController.resetPasswordRequest);
+// Request password reset via EMAIL (RATE LIMITED: 3/hour)
+router.post('/reset-password', passwordResetLimiter, authController.resetPasswordRequest);
 
-// Request password reset via SMS (Twilio Verify)
-router.post('/reset-password-sms', authController.resetPasswordSmsRequest);
+// Request password reset via SMS - Twilio Verify (RATE LIMITED: 3/hour)
+router.post('/reset-password-sms', passwordResetLimiter, authController.resetPasswordSmsRequest);
 
-// Verify SMS code and reset password
-router.post('/reset-password-sms/verify', authController.resetPasswordSmsVerify);
+// Verify SMS code and reset password (RATE LIMITED: 5/15min)
+router.post('/reset-password-sms/verify', otpLimiter, authController.resetPasswordSmsVerify);
 
 // Debug: Check Twilio status
 router.get('/twilio-status', authController.twilioStatus);

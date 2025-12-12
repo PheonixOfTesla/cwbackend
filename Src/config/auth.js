@@ -8,13 +8,19 @@ const jwt = require('jsonwebtoken');
  * @returns {string} JWT token
  */
 const generateToken = (userId, roles = []) => {
+    // SECURITY: No fallback - JWT_SECRET must be set
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('CRITICAL: JWT_SECRET environment variable is not set. Cannot generate token.');
+    }
+
     return jwt.sign(
-        { 
+        {
             id: userId,      // ✅ Use 'id' for consistency with middleware
             roles: roles     // ✅ Include roles for authorization checks
         },
-        process.env.JWT_SECRET || 'your-secret-key-change-in-production', 
-        { 
+        secret,
+        {
             expiresIn: process.env.JWT_EXPIRE || '7d'  // ✅ Changed default from 30d to 7d for better security
         }
     );
@@ -28,7 +34,12 @@ const generateToken = (userId, roles = []) => {
  */
 const verifyToken = (token) => {
     try {
-        return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+        // SECURITY: No fallback - JWT_SECRET must be set
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new Error('CRITICAL: JWT_SECRET environment variable is not set');
+        }
+        return jwt.verify(token, secret);
     } catch (error) {
         throw new Error(`Token verification failed: ${error.message}`);
     }

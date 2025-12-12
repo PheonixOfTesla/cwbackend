@@ -2,6 +2,7 @@
 const User = require('../models/User');
 const CoachClient = require('../models/CoachClient');
 const Workout = require('../models/Workout');
+const Session = require('../models/Session');
 const { ALL_EXERCISES } = require('../data/exerciseLibrary');
 const crypto = require('crypto');
 
@@ -879,6 +880,209 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get dashboard stats',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE SCHEDULING PREFERENCES
+// ============================================
+exports.updateScheduling = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      billingCycle,
+      sessionPrice,
+      sessionDurations,
+      minNoticeHours,
+      maxAdvanceBookingDays,
+      availableDays,
+      timeSlots,
+      availabilityTags,
+      autoAcceptBookings
+    } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update scheduling preferences'
+      });
+    }
+
+    const updateData = {};
+    if (billingCycle) updateData['coachProfile.scheduling.billingCycle'] = billingCycle;
+    if (sessionPrice !== undefined) updateData['coachProfile.scheduling.sessionPrice'] = sessionPrice;
+    if (sessionDurations) updateData['coachProfile.scheduling.sessionDurations'] = sessionDurations;
+    if (minNoticeHours !== undefined) updateData['coachProfile.scheduling.minNoticeHours'] = minNoticeHours;
+    if (maxAdvanceBookingDays !== undefined) updateData['coachProfile.scheduling.maxAdvanceBookingDays'] = maxAdvanceBookingDays;
+    if (availableDays) updateData['coachProfile.scheduling.availableDays'] = availableDays;
+    if (timeSlots) updateData['coachProfile.scheduling.timeSlots'] = timeSlots;
+    if (availabilityTags) updateData['coachProfile.scheduling.availabilityTags'] = availabilityTags;
+    if (autoAcceptBookings !== undefined) updateData['coachProfile.scheduling.autoAcceptBookings'] = autoAcceptBookings;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('coachProfile.scheduling');
+
+    res.json({
+      success: true,
+      message: 'Scheduling preferences updated',
+      scheduling: user.coachProfile.scheduling
+    });
+
+  } catch (error) {
+    console.error('Update scheduling error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update scheduling preferences',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE PAYMENT METHODS
+// ============================================
+exports.updatePaymentMethods = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { venmo, cashapp, paypal, zelle } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update payment methods'
+      });
+    }
+
+    const updateData = {};
+    if (venmo) {
+      updateData['coachProfile.paymentMethods.venmo'] = venmo;
+    }
+    if (cashapp) {
+      updateData['coachProfile.paymentMethods.cashapp'] = cashapp;
+    }
+    if (paypal) {
+      updateData['coachProfile.paymentMethods.paypal'] = paypal;
+    }
+    if (zelle) {
+      updateData['coachProfile.paymentMethods.zelle'] = zelle;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('coachProfile.paymentMethods');
+
+    res.json({
+      success: true,
+      message: 'Payment methods updated',
+      paymentMethods: user.coachProfile.paymentMethods
+    });
+
+  } catch (error) {
+    console.error('Update payment methods error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update payment methods',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// GET COACH AVAILABILITY
+// ============================================
+exports.getAvailability = async (req, res) => {
+  try {
+    const { coachId } = req.params;
+
+    const coach = await User.findById(coachId).select('name coachProfile');
+
+    if (!coach || coach.userType !== 'coach') {
+      return res.status(404).json({
+        success: false,
+        message: 'Coach not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      coach: {
+        id: coach._id,
+        name: coach.name,
+        specialty: coach.coachProfile?.specialty,
+        scheduling: coach.coachProfile?.scheduling,
+        paymentMethods: coach.coachProfile?.paymentMethods
+      }
+    });
+
+  } catch (error) {
+    console.error('Get availability error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get availability',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// GET COACH SESSIONS
+// ============================================
+exports.getSessions = async (req, res) => {
+  try {
+    const coachId = req.user.id;
+    const { status, from, to } = req.query;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can access this endpoint'
+      });
+    }
+
+    const query = { coach: coachId };
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (from || to) {
+      query.scheduledDate = {};
+      if (from) query.scheduledDate.$gte = new Date(from);
+      if (to) query.scheduledDate.$lte = new Date(to);
+    }
+
+    const sessions = await Session.find(query)
+      .populate('client', 'name email profile')
+      .sort({ scheduledDate: -1 })
+      .limit(100);
+
+    // Get upcoming sessions
+    const upcomingSessions = await Session.getUpcomingForCoach(coachId, 10);
+
+    res.json({
+      success: true,
+      sessions,
+      upcoming: upcomingSessions,
+      counts: {
+        total: sessions.length,
+        pending: sessions.filter(s => s.status === 'pending').length,
+        confirmed: sessions.filter(s => s.status === 'confirmed').length,
+        completed: sessions.filter(s => s.status === 'completed').length
+      }
+    });
+
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get sessions',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

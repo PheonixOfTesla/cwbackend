@@ -1,0 +1,177 @@
+{
+  "workoutName": "Upper Strength",
+  "clientName": "John Doe",
+  "scheduledDate": "2025-12-15T09:00:00.000Z",
+  "duration": 60,
+  "notes": "Focus on progressive overload. Add 5lbs if you hit all reps.",
+  "exercises": [
+    {
+      "exerciseId": "bb_bench_press",
+      "name": "Barbell Bench Press",
+      "sets": 4,
+      "reps": "6-8",
+      "rest": "90s",
+      "notes": "Pause at chest for 1 second",
+      "_libraryData": {
+        "id": "bb_bench_press",
+        "name": "Barbell Bench Press",
+        "videoUrl": "/exercises/library/bb_bench_press",
+        "primary": ["chest"],
+        "secondary": ["triceps", "shoulders"],
+        "equipment": ["barbell", "bench"],
+        "type": "compound",
+        "difficulty": 2,
+        "cues": [
+          "Arch upper back",
+          "Retract scapula",
+          "Drive feet into floor",
+          "Touch chest, pause, press"
+        ]
+      }
+    },
+    {
+      "exerciseId": "bb_row",
+      "name": "Barbell Row",
+      "sets": 4,
+      "reps": "8-10",
+      "rest": "90s",
+      "notes": "Pull to lower chest, squeeze lats",
+      "_libraryData": {
+        "id": "bb_row",
+        "name": "Barbell Row",
+        "videoUrl": "/exercises/library/bb_row",
+        "primary": ["back", "lats"],
+        "secondary": ["biceps", "traps"],
+        "equipment": ["barbell"],
+        "type": "compound",
+        "difficulty": 2,
+        "cues": [
+          "Hinge at hips, chest up",
+          "Pull bar to lower chest",
+          "Squeeze shoulder blades together",
+          "Control the descent"
+        ]
+      }
+    },
+    {
+      "exerciseId": "db_shoulder_press",
+      "name": "Dumbbell Shoulder Press",
+      "sets": 3,
+      "reps": "8-10",
+      "rest": "90s",
+      "notes": "Strict form, no leg drive",
+      "_libraryData": {
+        "id": "db_shoulder_press",
+        "name": "Dumbbell Shoulder Press",
+        "videoUrl": "/exercises/library/db_shoulder_press",
+        "primary": ["shoulders"],
+        "secondary": ["triceps"],
+        "equipment": ["dumbbell"],
+        "type": "compound",
+        "difficulty": 2
+      }
+    },
+    {
+      "exerciseId": "bb_curl",
+      "name": "Barbell Curl",
+      "sets": 3,
+      "reps": "10-12",
+      "rest": "60s",
+      "notes": "Control the negative, 2 second descent",
+      "_libraryData": {
+        "id": "bb_curl",
+        "name": "Barbell Curl",
+        "videoUrl": "/exercises/library/bb_curl",
+        "primary": ["biceps"],
+        "secondary": ["forearms"],
+        "equipment": ["barbell"],
+        "type": "isolation",
+        "difficulty": 1,
+        "cues": [
+          "Keep upper arms stationary",
+          "Curl weights forward while contracting biceps",
+          "Hold contracted position and squeeze",
+          "Slowly lower back down"
+        ]
+      }
+    },
+    {
+      "exerciseId": "cable_tricep_pushdown",
+      "name": "Cable Tricep Pushdown",
+      "sets": 3,
+      "reps": "12-15",
+      "rest": "60s",
+      "notes": "Full extension, squeeze at bottom",
+      "_libraryData": {
+        "id": "cable_tricep_pushdown",
+        "name": "Cable Tricep Pushdown",
+        "videoUrl": "/exercises/library/cable_tricep_pushdown",
+        "primary": ["triceps"],
+        "equipment": ["cable"],
+        "type": "isolation",
+        "difficulty": 1
+      }
+    }
+  ],
+  "workoutSummary": {
+    "totalExercises": 5,
+    "totalSets": 17,
+    "estimatedDuration": "60 minutes",
+    "musclesTargeted": ["chest", "back", "shoulders", "biceps", "triceps"],
+    "equipmentNeeded": ["barbell", "bench", "dumbbell", "cable machine"]
+  },
+  "apiRequest": {
+    "method": "POST",
+    "endpoint": "/api/coach/clients/CLIENT_ID/workouts",
+    "body": {
+      "name": "Upper Strength",
+      "scheduledDate": "2025-12-15T09:00:00.000Z",
+      "notes": "Focus on progressive overload. Add 5lbs if you hit all reps.",
+      "exercises": [
+        {
+          "exerciseId": "bb_bench_press",
+          "sets": 4,
+          "reps": "6-8",
+          "rest": "90s",
+          "notes": "Pause at chest for 1 second"
+        },
+        {
+          "exerciseId": "bb_row",
+          "sets": 4,
+          "reps": "8-10",
+          "rest": "90s",
+          "notes": "Pull to lower chest, squeeze lats"
+        },
+        {
+          "exerciseId": "db_shoulder_press",
+          "sets": 3,
+          "reps": "8-10",
+          "rest": "90s",
+          "notes": "Strict form, no leg drive"
+        },
+        {
+          "exerciseId": "bb_curl",
+          "sets": 3,
+          "reps": "10-12",
+          "rest": "60s",
+          "notes": "Control the negative, 2 second descent"
+        },
+        {
+          "exerciseId": "cable_tricep_pushdown",
+          "sets": 3,
+          "reps": "12-15",
+          "rest": "60s",
+          "notes": "Full extension, squeeze at bottom"
+        }
+      ]
+    }
+  },
+  "whatHappensOnBackend": {
+    "step1": "Coach sends minimal data (just exerciseId, sets, reps, notes)",
+    "step2": "Backend finds exercise in ALL_EXERCISES library by ID",
+    "step3": "Backend enriches with: name, videoUrl, primary muscles, equipment, cues",
+    "step4": "Workout saved to MongoDB with full library data attached",
+    "step5": "Client receives workout with embedded video links for each exercise",
+    "step6": "Client clicks arrow → goes to /exercises/library/bb_bench_press → sees full video & instructions"
+  }
+}

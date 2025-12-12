@@ -78,6 +78,120 @@ const userSchema = new mongoose.Schema({
     experienceYears: {
       type: Number,
       default: 0
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // SCHEDULING PREFERENCES
+    // ═══════════════════════════════════════════════════════════
+    scheduling: {
+      // Billing cycle for clients
+      billingCycle: {
+        type: String,
+        enum: ['weekly', 'biweekly', 'monthly', 'per-session'],
+        default: 'monthly'
+      },
+
+      // Session pricing (per session or package rate)
+      sessionPrice: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+
+      // Session duration options (in minutes)
+      sessionDurations: {
+        type: [Number],
+        default: [60], // Default 1 hour sessions
+        validate: {
+          validator: function(v) {
+            return v.every(duration => [30, 45, 60, 90, 120].includes(duration));
+          },
+          message: 'Session durations must be 30, 45, 60, 90, or 120 minutes'
+        }
+      },
+
+      // Booking window
+      minNoticeHours: {
+        type: Number,
+        default: 24, // Must book at least 24 hours in advance
+        min: 0
+      },
+      maxAdvanceBookingDays: {
+        type: Number,
+        default: 30, // Can't book more than 30 days ahead
+        min: 1
+      },
+
+      // Weekly availability (which days are available)
+      availableDays: {
+        type: [String],
+        default: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+        validate: {
+          validator: function(v) {
+            const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            return v.every(day => validDays.includes(day.toLowerCase()));
+          },
+          message: 'Invalid day name'
+        }
+      },
+
+      // Time preferences (multiple slots allowed)
+      timeSlots: [{
+        day: {
+          type: String,
+          enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        },
+        startTime: String, // Format: "HH:MM" (24-hour)
+        endTime: String    // Format: "HH:MM" (24-hour)
+      }],
+
+      // Quick availability tags
+      availabilityTags: {
+        type: [String],
+        default: [],
+        enum: ['early-morning', 'morning', 'afternoon', 'evening', 'late-night', 'weekends', 'flexible']
+      },
+
+      // Auto-accept bookings or require approval
+      autoAcceptBookings: {
+        type: Boolean,
+        default: false
+      }
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // PAYMENT METHODS (Direct peer-to-peer)
+    // ═══════════════════════════════════════════════════════════
+    paymentMethods: {
+      venmo: {
+        username: String,
+        enabled: {
+          type: Boolean,
+          default: false
+        }
+      },
+      cashapp: {
+        cashtag: String, // e.g., "$username"
+        enabled: {
+          type: Boolean,
+          default: false
+        }
+      },
+      paypal: {
+        email: String,
+        enabled: {
+          type: Boolean,
+          default: false
+        }
+      },
+      zelle: {
+        email: String,
+        phone: String,
+        enabled: {
+          type: Boolean,
+          default: false
+        }
+      }
     }
   },
 

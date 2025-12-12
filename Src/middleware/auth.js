@@ -13,7 +13,15 @@ const protect = async (req, res, next) => {
         try {
             token = req.headers.authorization.split(' ')[1];
 
-            const secret = process.env.JWT_SECRET || 'your-secret-key';
+            // SECURITY: No fallback - JWT_SECRET must be set
+            const secret = process.env.JWT_SECRET;
+            if (!secret) {
+                console.error('❌ CRITICAL: JWT_SECRET environment variable is not set');
+                return res.status(500).json({
+                    success: false,
+                    message: 'Server configuration error'
+                });
+            }
             const decoded = jwt.verify(token, secret);
 
             const userIdToFind = decoded.id || decoded.userId || decoded._id;

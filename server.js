@@ -22,25 +22,26 @@ const PORT = process.env.PORT || 5000;
 // ============================================
 const corsOptions = {
     origin: function (origin, callback) {
+        // SECURITY: Allow requests with no origin (mobile apps, Postman)
         if (!origin) return callback(null, true);
 
-        if (process.env.NODE_ENV === 'production') {
-            return callback(null, true);
-        }
-
         const allowedOrigins = [
+            // Development
             'http://localhost:3000',
             'http://localhost:5000',
             'http://localhost:5173',
             'http://localhost:8080',
+            // Production domains
             'https://clockwork.fit',
             'https://www.clockwork.fit',
             'https://theclockworkhub.com',
             'https://www.theclockworkhub.com',
             'https://coastalfitnesshub.com',
+            // Deployment platforms
             /\.vercel\.app$/,
             /\.netlify\.app$/,
-            /\.railway\.app$/
+            /\.railway\.app$/,
+            /^https:\/\/cwbackend-production-[a-z0-9]+\.up\.railway\.app$/
         ];
 
         const isAllowed = allowedOrigins.some(allowed => {
@@ -50,7 +51,13 @@ const corsOptions = {
             return allowed.test(origin);
         });
 
-        callback(null, isAllowed || true);
+        // SECURITY: Reject unauthorized origins (removed || true fallback)
+        if (!isAllowed) {
+            console.warn(`⚠️  CORS blocked origin: ${origin}`);
+            return callback(new Error('Not allowed by CORS'));
+        }
+
+        callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

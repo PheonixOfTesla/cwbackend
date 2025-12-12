@@ -71,6 +71,22 @@ router.get('/clients/:clientId/workouts', coachController.getClientWorkouts);
 router.post('/clients/:clientId/assign-program', coachController.assignProgram);
 
 // ============================================
+// SCHEDULING & PAYMENTS
+// ============================================
+
+// PUT /api/coach/scheduling - Update scheduling preferences
+router.put('/scheduling', coachController.updateScheduling);
+
+// PUT /api/coach/payment-methods - Update payment methods
+router.put('/payment-methods', coachController.updatePaymentMethods);
+
+// GET /api/coach/:coachId/availability - Get coach availability (public)
+router.get('/:coachId/availability', coachController.getAvailability);
+
+// GET /api/coach/sessions - Get my sessions
+router.get('/sessions', coachController.getSessions);
+
+// ============================================
 // INVITATION HANDLING (Client side)
 // ============================================
 
