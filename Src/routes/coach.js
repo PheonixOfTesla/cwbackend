@@ -45,8 +45,11 @@ router.get('/clients', coachController.getMyClients);
 // POST /api/coach/invite - Invite a new client (RATE LIMITED: 10/hour)
 router.post('/invite', coachInviteLimiter, coachController.inviteClient);
 
-// DELETE /api/coach/clients/:clientId - Remove a client
-router.delete('/clients/:clientId', coachController.removeClient);
+// PUT /api/coach/clients/:relationshipId/approve - Approve pending client
+router.put('/clients/:relationshipId/approve', coachController.approveClient);
+
+// DELETE /api/coach/clients/:relationshipId - Remove/reject a client
+router.delete('/clients/:relationshipId', coachController.removeClient);
 
 // PUT /api/coach/clients/:clientId/notes - Update client notes
 router.put('/clients/:clientId/notes', coachController.updateClientNotes);

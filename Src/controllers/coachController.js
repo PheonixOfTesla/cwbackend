@@ -187,18 +187,28 @@ exports.getMyClients = async (req, res) => {
 
     const relationships = await CoachClient.find({ coach: coachId })
       .populate('client', 'name email profile experience onboarding lastLogin createdAt')
-      .sort({ startDate: -1 });
+      .sort({ invitedAt: -1, startDate: -1 });
 
     const clients = relationships.map(rel => ({
-      id: rel.client._id,
-      name: rel.client.name,
-      email: rel.client.email,
-      profile: rel.client.profile,
-      experience: rel.client.experience,
-      onboardingCompleted: rel.client.onboarding?.completed || false,
-      relationshipStatus: rel.status,
+      id: rel._id, // Relationship ID (for approve/reject actions)
+      client: rel.client ? {
+        id: rel.client._id,
+        name: rel.client.name,
+        email: rel.client.email,
+        profile: rel.client.profile,
+        experience: rel.client.experience,
+        onboardingCompleted: rel.client.onboarding?.completed || false,
+        lastLogin: rel.client.lastLogin,
+        createdAt: rel.client.createdAt
+      } : {
+        // For pending invitations that haven't been accepted yet
+        email: rel.invitationEmail,
+        name: 'Pending User'
+      },
+      status: rel.status,
+      invitedAt: rel.invitedAt,
+      acceptedAt: rel.acceptedAt,
       startDate: rel.startDate,
-      lastLogin: rel.client.lastLogin,
       coachNotes: rel.coachNotes,
       currentProgram: rel.currentProgram,
       durationDays: rel.durationDays
@@ -380,12 +390,66 @@ exports.acceptInvitation = async (req, res) => {
 };
 
 // ============================================
+// APPROVE CLIENT REQUEST
+// ============================================
+exports.approveClient = async (req, res) => {
+  try {
+    const coachId = req.user.id;
+    const { relationshipId } = req.params;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can approve clients'
+      });
+    }
+
+    const relationship = await CoachClient.findOne({
+      _id: relationshipId,
+      coach: coachId,
+      status: 'pending'
+    });
+
+    if (!relationship) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pending client request not found'
+      });
+    }
+
+    // Activate the relationship
+    await relationship.activate();
+
+    // Update client's userType to 'client' if they're currently individual
+    if (relationship.client) {
+      await User.findByIdAndUpdate(relationship.client, {
+        userType: 'client',
+        coachId: coachId
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Client approved successfully'
+    });
+
+  } catch (error) {
+    console.error('Approve client error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve client',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
 // REMOVE CLIENT
 // ============================================
 exports.removeClient = async (req, res) => {
   try {
     const coachId = req.user.id;
-    const { clientId } = req.params;
+    const { relationshipId } = req.params;
 
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
@@ -395,8 +459,8 @@ exports.removeClient = async (req, res) => {
     }
 
     const relationship = await CoachClient.findOne({
-      coach: coachId,
-      client: clientId
+      _id: relationshipId,
+      coach: coachId
     });
 
     if (!relationship) {
@@ -406,14 +470,20 @@ exports.removeClient = async (req, res) => {
       });
     }
 
-    // End the relationship
-    await relationship.end();
+    // If pending, just delete it; if active, end it gracefully
+    if (relationship.status === 'pending') {
+      await CoachClient.findByIdAndDelete(relationshipId);
+    } else {
+      await relationship.end();
+    }
 
-    // Update client's userType back to individual
-    await User.findByIdAndUpdate(clientId, {
-      userType: 'individual',
-      coachId: null
-    });
+    // Update client's userType back to individual if they had a client
+    if (relationship.client) {
+      await User.findByIdAndUpdate(relationship.client, {
+        userType: 'individual',
+        coachId: null
+      });
+    }
 
     res.json({
       success: true,
