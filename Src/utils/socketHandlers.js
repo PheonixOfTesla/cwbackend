@@ -165,6 +165,22 @@ module.exports = (io) => {
         });
 
         // ============================================
+        // COACH-CLIENT EVENTS
+        // ============================================
+
+        // Coach subscribes to client updates
+        socket.on('coach:subscribe', () => {
+            console.log(`[Socket] Coach ${userId} subscribed to client updates`);
+            socket.join(`coach:${userId}`);
+        });
+
+        // Client subscribes to coach updates (approvals, workouts, etc)
+        socket.on('client:subscribe', () => {
+            console.log(`[Socket] Client ${userId} subscribed to coach updates`);
+            socket.join(`client:${userId}`);
+        });
+
+        // ============================================
         // DISCONNECT
         // ============================================
 
@@ -220,6 +236,60 @@ module.exports = (io) => {
     // Check if user is connected
     io.isUserConnected = (userId) => {
         return connectedUsers.has(userId);
+    };
+
+    // ============================================
+    // COACH-CLIENT BROADCAST FUNCTIONS
+    // ============================================
+
+    // Notify coach of new pending client request
+    io.notifyCoachNewClient = (coachId, clientData) => {
+        io.to(`coach:${coachId}`).emit('coach:new-client-request', {
+            type: 'new_request',
+            client: clientData,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Socket] Notified coach ${coachId} of new client request`);
+    };
+
+    // Notify client when coach approves them
+    io.notifyClientApproved = (clientId, coachData) => {
+        io.to(`client:${clientId}`).emit('client:approved', {
+            type: 'approved',
+            coach: coachData,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Socket] Notified client ${clientId} of approval`);
+    };
+
+    // Notify client when coach rejects them
+    io.notifyClientRejected = (clientId, coachData) => {
+        io.to(`client:${clientId}`).emit('client:rejected', {
+            type: 'rejected',
+            coach: coachData,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Socket] Notified client ${clientId} of rejection`);
+    };
+
+    // Notify client of new workout assigned
+    io.notifyClientNewWorkout = (clientId, workoutData) => {
+        io.to(`client:${clientId}`).emit('client:new-workout', {
+            type: 'new_workout',
+            workout: workoutData,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Socket] Notified client ${clientId} of new workout`);
+    };
+
+    // Notify coach when client completes workout
+    io.notifyCoachWorkoutComplete = (coachId, workoutData) => {
+        io.to(`coach:${coachId}`).emit('coach:client-workout-complete', {
+            type: 'workout_complete',
+            workout: workoutData,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Socket] Notified coach ${coachId} of completed workout`);
     };
 };
 

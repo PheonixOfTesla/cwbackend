@@ -426,6 +426,17 @@ exports.approveClient = async (req, res) => {
         userType: 'client',
         coachId: coachId
       });
+
+      // Real-time notification to client
+      if (global.io) {
+        const coach = await User.findById(coachId).select('name email coachProfile');
+        global.io.notifyClientApproved(relationship.client, {
+          id: coach._id,
+          name: coach.name,
+          email: coach.email,
+          specialty: coach.coachProfile?.specialty
+        });
+      }
     }
 
     res.json({
@@ -471,7 +482,9 @@ exports.removeClient = async (req, res) => {
     }
 
     // If pending, just delete it; if active, end it gracefully
-    if (relationship.status === 'pending') {
+    const wasPending = relationship.status === 'pending';
+
+    if (wasPending) {
       await CoachClient.findByIdAndDelete(relationshipId);
     } else {
       await relationship.end();
@@ -483,6 +496,15 @@ exports.removeClient = async (req, res) => {
         userType: 'individual',
         coachId: null
       });
+
+      // Real-time notification to client
+      if (global.io && wasPending) {
+        const coach = await User.findById(coachId).select('name email');
+        global.io.notifyClientRejected(relationship.client, {
+          id: coach._id,
+          name: coach.name
+        });
+      }
     }
 
     res.json({
@@ -676,6 +698,17 @@ exports.createWorkout = async (req, res) => {
     });
 
     await workout.populate('clientId', 'name email');
+
+    // Real-time notification to client
+    if (global.io) {
+      global.io.notifyClientNewWorkout(clientId, {
+        id: workout._id,
+        name: workout.name,
+        scheduledDate: workout.scheduledDate,
+        exerciseCount: workout.exercises.length,
+        notes: workout.notes
+      });
+    }
 
     res.status(201).json({
       success: true,
