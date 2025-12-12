@@ -163,11 +163,11 @@ exports.markAsRead = async (req, res) => {
 };
 
 // ============================================
-// SEND VIDEO CALL LINK
+// SEND ZOOM VIDEO CALL LINK
 // ============================================
 exports.sendVideoCallLink = async (req, res) => {
   try {
-    const { recipientId, platform, customLink } = req.body;
+    const { recipientId, customLink } = req.body;
 
     // Verify relationship
     const relationship = await CoachClient.findOne({
@@ -184,36 +184,18 @@ exports.sendVideoCallLink = async (req, res) => {
       });
     }
 
+    // Use Zoom only - it's already there and bug-free
     let videoLink;
     let messageText;
 
     if (customLink) {
-      // Use custom link provided by coach
+      // Use custom Zoom link provided by coach
       videoLink = customLink;
-      messageText = `📹 Video Call Link: ${customLink}`;
+      messageText = `📹 Zoom Meeting Link: ${customLink}`;
     } else {
-      // Generate platform-specific link
-      switch (platform) {
-        case 'zoom':
-          // For production, integrate with Zoom API
-          // For now, use placeholder that opens Zoom
-          videoLink = 'https://zoom.us/start/videomeeting';
-          messageText = '📹 Click to start Zoom meeting: https://zoom.us/start/videomeeting';
-          break;
-        case 'google-meet':
-          videoLink = 'https://meet.google.com/new';
-          messageText = '📹 Click to start Google Meet: https://meet.google.com/new';
-          break;
-        case 'facetime':
-          // FaceTime link (iOS only)
-          const user = await User.findById(req.user.id).select('phone email');
-          videoLink = `facetime:${user.phone || user.email}`;
-          messageText = `📹 FaceTime call from ${req.user.name}`;
-          break;
-        default:
-          videoLink = 'https://whereby.com/' + Date.now();
-          messageText = `📹 Video Call Link: ${videoLink}`;
-      }
+      // Use Zoom instant meeting
+      videoLink = 'https://zoom.us/start/videomeeting';
+      messageText = '📹 Click to start Zoom meeting: https://zoom.us/start/videomeeting';
     }
 
     const message = await Message.create({
@@ -232,10 +214,11 @@ exports.sendVideoCallLink = async (req, res) => {
         timestamp: new Date().toISOString()
       });
 
-      // Special notification for video call
+      // Special notification for Zoom call
       global.io.to(`user:${recipientId}`).emit('video-call-invite', {
         from: req.user.name,
         link: videoLink,
+        platform: 'zoom',
         timestamp: new Date().toISOString()
       });
     }
@@ -247,7 +230,7 @@ exports.sendVideoCallLink = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Send video call link error:', error);
+    console.error('Send Zoom link error:', error);
     res.status(500).json({
       success: false,
       message: error.message
