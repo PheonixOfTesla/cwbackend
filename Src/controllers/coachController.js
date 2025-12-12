@@ -190,8 +190,10 @@ exports.getMyClients = async (req, res) => {
       .sort({ invitedAt: -1, startDate: -1 });
 
     const clients = relationships.map(rel => ({
-      id: rel._id, // Relationship ID (for approve/reject actions)
+      _id: rel._id, // Relationship ID (for approve/reject actions)
+      id: rel._id,  // Compatibility
       client: rel.client ? {
+        _id: rel.client._id,
         id: rel.client._id,
         name: rel.client.name,
         email: rel.client.email,
@@ -203,7 +205,7 @@ exports.getMyClients = async (req, res) => {
       } : {
         // For pending invitations that haven't been accepted yet
         email: rel.invitationEmail,
-        name: 'Pending User'
+        name: 'Pending Invitation'
       },
       status: rel.status,
       invitedAt: rel.invitedAt,
