@@ -1,5 +1,5 @@
 // Src/controllers/intelligenceController.js
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const WearableData = require('../models/WearableData');
 const Workout = require('../models/Workout');
 const Measurement = require('../models/Measurement');
@@ -7,13 +7,16 @@ const Nutrition = require('../models/Nutrition');
 const Goal = require('../models/Goal');
 const { getLatestCompleteData } = require('./wearableController');
 
-// Initialize Anthropic (Claude) - primary AI provider
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Initialize OpenRouter with Kimi K2 - 100% FREE AI provider
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE on OpenRouter
 
 /**
  * ✅ CLOCKWORK ELITE INTELLIGENCE ENGINE
- * - AI model: Claude 3.5 Haiku (Anthropic)
+ * - AI model: Kimi K2 (Moonshot AI via OpenRouter) - 100% FREE
  * - Smart data fetching with fallback from history
  * - Always returns insights
  */
@@ -158,14 +161,14 @@ exports.getHealthMetrics = async (req, res) => {
     let aiInsights = null;
     
     // Always attempt AI if we have ANY data
-    const hasAnyData = recoveryAnalysis.score > 0 || 
-                       trainingAnalysis.score > 0 || 
+    const hasAnyData = recoveryAnalysis.score > 0 ||
+                       trainingAnalysis.score > 0 ||
                        nutritionAnalysis.score > 0 ||
                        goalAnalysis.score > 0;
-    
-    if (process.env.ANTHROPIC_API_KEY && hasAnyData) {
+
+    if (process.env.OPENROUTER_API_KEY && hasAnyData) {
       try {
-        console.log('🤖 Generating Elite AI Coaching with Claude 3.5 Haiku...');
+        console.log('🤖 Generating Elite AI Coaching with Kimi K2 (FREE)...');
 
         const prompt = buildEliteCoachingPrompt(
           recoveryAnalysis,
@@ -177,15 +180,15 @@ exports.getHealthMetrics = async (req, res) => {
           activeGoals
         );
 
-        console.log('📤 Sending prompt to Claude...');
-        const message = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
+        console.log('📤 Sending prompt to Kimi K2...');
+        const completion = await openai.chat.completions.create({
+          model: AI_MODEL,
           max_tokens: 2048,
           messages: [{ role: 'user', content: prompt }]
         });
-        aiInsights = message.content[0].text;
+        aiInsights = completion.choices[0].message.content;
 
-        console.log('✅ Elite AI Coaching Generated Successfully');
+        console.log('✅ Elite AI Coaching Generated Successfully (FREE)');
         console.log(`📊 AI Response Length: ${aiInsights.length} characters`);
       } catch (aiError) {
         console.error('⚠️ AI Generation Error:', aiError.message);
@@ -200,8 +203,8 @@ exports.getHealthMetrics = async (req, res) => {
         );
       }
     } else {
-      if (!process.env.ANTHROPIC_API_KEY) {
-        console.log('⚠️ ANTHROPIC_API_KEY not set - using rule-based insights');
+      if (!process.env.OPENROUTER_API_KEY) {
+        console.log('⚠️ OPENROUTER_API_KEY not set - using rule-based insights');
       } else {
         console.log('⚠️ Insufficient data for AI analysis');
       }

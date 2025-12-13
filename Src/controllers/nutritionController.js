@@ -6,11 +6,14 @@
 const Nutrition = require('../models/Nutrition');
 const User = require('../models/User');
 const CalendarEvent = require('../models/CalendarEvent');
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 
-// Initialize Anthropic (Claude)
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Initialize OpenRouter with Kimi K2 - 100% FREE
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE
 
 // ============================================
 // TDEE & MACRO CALCULATION (Mifflin-St Jeor)
@@ -287,15 +290,15 @@ Return ONLY valid JSON:
 
 For imageCategory, use one of: eggs, chicken, steak, fish, salad, rice, pasta, sandwich, smoothie, oatmeal, yogurt, nuts, fruit, vegetables, soup`;
 
-    console.log('🍳 FORGE Kitchen generating meal plan...');
+    console.log('🍳 FORGE Kitchen generating meal plan with Kimi K2 (FREE)...');
 
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    const completion = await openai.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }]
     });
 
-    const aiText = message.content[0].text;
+    const aiText = completion.choices[0].message.content;
 
     // Parse response
     let mealPlan;

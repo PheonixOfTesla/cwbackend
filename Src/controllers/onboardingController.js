@@ -1,11 +1,14 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const User = require('../models/User');
 const CalendarEvent = require('../models/CalendarEvent');
 const Goal = require('../models/Goal');
 
-// Initialize Anthropic (Claude) - primary AI provider
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Initialize OpenRouter with Kimi K2 - 100% FREE
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE
 
 // Step field mappings - GOD TIER personalization
 const STEP_FIELDS = {
@@ -456,21 +459,21 @@ exports.generateProgram = async (req, res) => {
  * Generate initial program using AI
  */
 async function generateInitialProgram(user) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENROUTER_API_KEY) {
     console.log('No AI API key - generating fallback program');
     return generateFallbackProgram(user);
   }
 
   try {
     const prompt = buildInitialProgramPrompt(user);
-    console.log('🤖 Generating initial training program with Claude...');
+    console.log('🤖 Generating initial training program with Kimi K2 (FREE)...');
 
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    const completion = await openai.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     });
-    const aiText = message.content[0].text;
+    const aiText = completion.choices[0].message.content;
 
     // Parse JSON from response
     const jsonMatch = aiText.match(/```(?:json)?\s*([\s\S]*?)```/) ||

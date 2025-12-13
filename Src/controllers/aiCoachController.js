@@ -2,13 +2,16 @@
 // This is THE CORE VALUE PROP - AI that coaches individuals
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const recoveryService = require('../services/recoveryService');
 const prDetectionService = require('../services/prDetectionService');
 
-// Initialize Anthropic (Claude) - primary and ONLY AI provider
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022'; // Haiku 3.5 - fast & cost-effective
+// Initialize OpenRouter with Kimi K2 - 100% FREE AI provider
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE on OpenRouter
 
 // FORGE PERSONALITY SYSTEM PROMPT - Encouraging but Practical
 const FORGE_IDENTITY = `You are FORGE - your AI fitness coach built into ClockWork.
@@ -48,7 +51,7 @@ REMEMBER: You're their coach and partner in this. Build the relationship. When t
 
 
 
-// Helper: Generate content with Claude (Anthropic only) + 30s timeout
+// Helper: Generate content with Kimi K2 (OpenRouter) + 30s timeout
 const AI_TIMEOUT_MS = 30000; // 30 seconds
 
 async function generateAIContent(prompt, systemPrompt = null) {
@@ -58,25 +61,31 @@ async function generateAIContent(prompt, systemPrompt = null) {
       setTimeout(() => reject(new Error('AI_TIMEOUT')), AI_TIMEOUT_MS);
     });
 
+    // Build messages array with system prompt if provided
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt || FORGE_IDENTITY });
+    }
+    messages.push({ role: 'user', content: prompt });
+
     // Race between API call and timeout
-    const message = await Promise.race([
-      anthropic.messages.create({
-        model: CLAUDE_MODEL,
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: AI_MODEL,
         max_tokens: 1024,
-        system: systemPrompt || FORGE_IDENTITY,
-        messages: [{ role: 'user', content: prompt }]
+        messages: messages
       }),
       timeoutPromise
     ]);
 
-    console.log('[FORGE] Response from Claude Haiku 3.5');
-    return { text: message.content[0].text, source: 'claude' };
+    console.log('[FORGE] Response from Kimi K2 (FREE)');
+    return { text: completion.choices[0].message.content, source: 'kimi-k2' };
   } catch (error) {
     if (error.message === 'AI_TIMEOUT') {
-      console.error('[FORGE] Claude timeout after 30s');
+      console.error('[FORGE] Kimi K2 timeout after 30s');
       throw new Error('FORGE is taking too long - please try again');
     }
-    console.error('[FORGE] Claude error:', error.message);
+    console.error('[FORGE] Kimi K2 error:', error.message);
     throw new Error('FORGE is temporarily unavailable - please try again');
   }
 }

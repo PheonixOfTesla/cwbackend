@@ -1,13 +1,16 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const CalendarEvent = require('../models/CalendarEvent');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const User = require('../models/User');
 const Workout = require('../models/Workout');
 
-// Initialize Anthropic (Claude) - primary AI provider
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Initialize OpenRouter with Kimi K2 - 100% FREE
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE
 
 // Helper function to normalize event type to valid enum values
 // Placed at top so it can be used by both generateWeek and generateMonth
@@ -325,21 +328,21 @@ exports.generateWeek = async (req, res) => {
     // Build AI prompt
     const prompt = buildWeeklyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate);
 
-    // Generate with Claude (Anthropic)
-    if (!process.env.ANTHROPIC_API_KEY) {
+    // Generate with Kimi K2 (OpenRouter)
+    if (!process.env.OPENROUTER_API_KEY) {
       return res.status(400).json({
         success: false,
         message: 'AI API key not configured'
       });
     }
 
-    console.log('🔨 FORGE generating weekly training plan...');
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    console.log('🔨 FORGE generating weekly training plan with Kimi K2 (FREE)...');
+    const completion = await openai.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     });
-    const aiText = message.content[0].text;
+    const aiText = completion.choices[0].message.content;
 
     // Parse JSON from AI response
     let plan;
@@ -554,21 +557,21 @@ exports.generateMonth = async (req, res) => {
     // Build AI prompt for monthly plan
     const prompt = buildMonthlyPlanPrompt(user, checkIns, wearableData, recentWorkouts, startDate);
 
-    // Generate with Claude (Anthropic)
-    if (!process.env.ANTHROPIC_API_KEY) {
+    // Generate with Kimi K2 (OpenRouter)
+    if (!process.env.OPENROUTER_API_KEY) {
       return res.status(400).json({
         success: false,
         message: 'AI API key not configured'
       });
     }
 
-    console.log('🔥 FORGE generating monthly training program...');
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    console.log('🔥 FORGE generating monthly training program with Kimi K2 (FREE)...');
+    const completion = await openai.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 8192,
       messages: [{ role: 'user', content: prompt }]
     });
-    const aiText = message.content[0].text;
+    const aiText = completion.choices[0].message.content;
 
     // Parse JSON from AI response
     let plan;

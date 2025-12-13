@@ -1,13 +1,16 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const Goal = require('../models/Goal');
 const Workout = require('../models/Workout');
 const CalendarEvent = require('../models/CalendarEvent');
 
-// Initialize Anthropic (Claude) - primary AI provider
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Initialize OpenRouter with Kimi K2 - 100% FREE
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE
 
 /**
  * Get today's check-in (or pre-filled template)
@@ -302,7 +305,7 @@ async function getLatestWearableData(userId) {
  * Generate AI training recommendation based on check-in
  */
 async function generateTrainingRecommendation(checkIn, userId) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENROUTER_API_KEY) {
     return generateRuleBasedRecommendation(checkIn);
   }
 
@@ -344,12 +347,12 @@ Return ONLY valid JSON:
   "nutritionTip": "One specific nutrition tip for today"
 }`;
 
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+    const completion = await openai.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 512,
       messages: [{ role: 'user', content: prompt }]
     });
-    const aiText = message.content[0].text;
+    const aiText = completion.choices[0].message.content;
 
     // Parse JSON
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
