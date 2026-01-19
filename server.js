@@ -151,41 +151,41 @@ app.use((req, res, next) => {
 // ============================================
 
 // Core Auth & User
-const authRoutes = require('./Src/routes/auth');
-const userRoutes = require('./Src/routes/user');
+const authRoutes = require('./src/routes/auth');
+const userRoutes = require('./src/routes/user');
 
 // NEW: Coach & AI Coach (B2C/B2B Core)
-const coachRoutes = require('./Src/routes/coach');
-const aiCoachRoutes = require('./Src/routes/aiCoach');
+const coachRoutes = require('./src/routes/coach');
+const aiCoachRoutes = require('./src/routes/aiCoach');
 
 // Fitness Features
-const workoutRoutes = require('./Src/routes/workout');
-const exerciseRoutes = require('./Src/routes/exercises');
-const nutritionRoutes = require('./Src/routes/nutrition');
-const goalRoutes = require('./Src/routes/goals');
-const measurementRoutes = require('./Src/routes/measurements');
+const workoutRoutes = require('./src/routes/workout');
+const exerciseRoutes = require('./src/routes/exercises');
+const nutritionRoutes = require('./src/routes/nutrition');
+const goalRoutes = require('./src/routes/goals');
+const measurementRoutes = require('./src/routes/measurements');
 
 // Calendar & Check-ins
-const calendarRoutes = require('./Src/routes/calendar');
-const checkInRoutes = require('./Src/routes/checkin');
-const onboardingRoutes = require('./Src/routes/onboarding');
+const calendarRoutes = require('./src/routes/calendar');
+const checkInRoutes = require('./src/routes/checkin');
+const onboardingRoutes = require('./src/routes/onboarding');
 
 // Community & Messaging
-const communityRoutes = require('./Src/routes/communities');
-const messageRoutes = require('./Src/routes/message');
+const communityRoutes = require('./src/routes/communities');
+const messageRoutes = require('./src/routes/message');
 
 // Intelligence & Wearables
-const intelligenceRoutes = require('./Src/routes/intelligence');
-const wearableRoutes = require('./Src/routes/wearables');
+const intelligenceRoutes = require('./src/routes/intelligence');
+const wearableRoutes = require('./src/routes/wearables');
 
 // Billing
-const subscriptionRoutes = require('./Src/routes/subscriptions');
+const subscriptionRoutes = require('./src/routes/subscriptions');
 
 // Habits
-const habitRoutes = require('./Src/routes/habits');
+const habitRoutes = require('./src/routes/habits');
 
 // Testing
-const testRoutes = require('./Src/routes/test');
+const testRoutes = require('./src/routes/test');
 
 // ============================================
 // MOUNT ALL ROUTES
@@ -318,7 +318,7 @@ app.get('/api', (req, res) => {
 // ============================================
 // SOCKET.IO HANDLERS
 // ============================================
-require('./Src/utils/socketHandlers')(io);
+require('./src/utils/socketHandlers')(io);
 
 // ============================================
 // ERROR HANDLING
