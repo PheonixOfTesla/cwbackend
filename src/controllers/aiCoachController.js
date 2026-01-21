@@ -158,14 +158,20 @@ exports.generateProgram = async (req, res) => {
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
 
-    // Check subscription limits
-    const features = user.getSubscriptionFeatures();
-    if (aiCoach.aiStats.queriesThisMonth >= features.aiQueriesPerMonth) {
+    // Check and expire trial if needed
+    await user.checkTrialExpiration();
+
+    // Simple paywall: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
+      const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
-        message: 'Monthly AI query limit reached. Upgrade to Pro for more.',
-        limit: features.aiQueriesPerMonth,
-        used: aiCoach.aiStats.queriesThisMonth
+        message: trialHours > 0
+          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
+          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
+        trialExpired: true,
+        requiresSubscription: true,
+        trialRemaining: trialHours
       });
     }
 
@@ -356,13 +362,20 @@ exports.generateWorkout = async (req, res) => {
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
 
-    // Check limits
-    const features = user.getSubscriptionFeatures();
-    if (aiCoach.aiStats.queriesThisMonth >= features.aiQueriesPerMonth) {
+    // Check and expire trial if needed
+    await user.checkTrialExpiration();
+
+    // Simple paywall: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
+      const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
-        message: 'Monthly AI query limit reached',
-        limit: features.aiQueriesPerMonth
+        message: trialHours > 0
+          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
+          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
+        trialExpired: true,
+        requiresSubscription: true,
+        trialRemaining: trialHours
       });
     }
 
@@ -583,15 +596,20 @@ exports.askCoach = async (req, res) => {
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
 
-    // Check limits
-    const features = user.getSubscriptionFeatures();
-    if (aiCoach.aiStats.queriesThisMonth >= features.aiQueriesPerMonth) {
+    // Check and expire trial if needed
+    await user.checkTrialExpiration();
+
+    // Simple paywall: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
+      const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
-        message: 'Monthly AI query limit reached. Upgrade to Pro for unlimited AI coaching.',
-        limitReached: true,
-        limit: features.aiQueriesPerMonth,
-        used: aiCoach.aiStats.queriesThisMonth
+        message: trialHours > 0
+          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
+          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
+        trialExpired: true,
+        requiresSubscription: true,
+        trialRemaining: trialHours
       });
     }
 
