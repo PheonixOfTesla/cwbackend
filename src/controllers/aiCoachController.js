@@ -601,13 +601,35 @@ function enrichWorkoutWithLinks(workout) {
 }
 
 // Detect if user is asking FORGE to DO something
-function detectActionIntent(question) {
-  const q = question.toLowerCase();
+function detectActionIntent(question, conversationHistory) {
+  const q = question.toLowerCase().trim();
 
-  // Calendar/Schedule actions
+  // User confirmation to create program (short responses like "okay", "go", "yes", "do it")
+  const confirmationPhrases = ['okay', 'ok', 'go', 'yes', 'yep', 'yeah', 'sure', 'do it', 'let\'s go', 'lets go', 'let\'s do it', 'lets do it', 'create it', 'make it', 'sounds good', 'perfect', 'absolutely', 'for sure'];
+  const isConfirmation = confirmationPhrases.some(phrase => q === phrase || q.startsWith(phrase + ' ') || q.endsWith(' ' + phrase));
+
+  // Check if recent conversation mentioned creating a program
+  const recentContext = conversationHistory?.slice(-4).map(m => m.content.toLowerCase()).join(' ') || '';
+  const discussedProgram = recentContext.includes('create') && (recentContext.includes('program') || recentContext.includes('plan')) ||
+                          recentContext.includes('generate') && (recentContext.includes('program') || recentContext.includes('plan'));
+
+  // If user confirms and we were discussing program creation, trigger full program generation
+  if (isConfirmation && discussedProgram) {
+    return 'GENERATE_FULL_PROGRAM';
+  }
+
+  // Explicit program creation requests
+  if (q.includes('create my program') || q.includes('generate my program') ||
+      q.includes('make my program') || q.includes('build my program') ||
+      (q.includes('create') && q.includes('program')) ||
+      (q.includes('generate') && q.includes('plan'))) {
+    return 'GENERATE_FULL_PROGRAM';
+  }
+
+  // Calendar/Schedule actions (simpler, just add workouts)
   if (q.includes('calendar') || q.includes('schedule') || q.includes('add workout') ||
       q.includes('create workout') || q.includes('put') && (q.includes('calendar') || q.includes('schedule')) ||
-      q.includes('propagate') || q.includes('generate') && (q.includes('week') || q.includes('program') || q.includes('plan'))) {
+      q.includes('propagate')) {
     return 'GENERATE_CALENDAR';
   }
 
@@ -682,12 +704,194 @@ exports.askCoach = async (req, res) => {
     const hasActiveProgram = activeProgram && activeProgram.status === 'active';
 
     // Detect if this is an action request
-    const actionIntent = detectActionIntent(question);
+    const actionIntent = detectActionIntent(question, conversationHistory);
     let actionResult = null;
     let actionPromptAddition = '';
 
+    // ═══════════════════════════════════════════════════════════
+    // GENERATE FULL PROGRAM (Comprehensive 8-week with meals)
+    // ═══════════════════════════════════════════════════════════
+    if (actionIntent === 'GENERATE_FULL_PROGRAM' && !hasActiveProgram) {
+      try {
+        console.log('[FORGE] Executing action: GENERATE_FULL_PROGRAM');
+
+        // Import program controller's generation logic
+        const programController = require('./programController');
+        const Nutrition = require('../models/Nutrition');
+
+        // Gather user data
+        const scheduleData = user.schedule || {};
+        const exercisePrefs = user.exercisePreferences || {};
+        const bodyCompData = user.bodyComposition || {};
+        const experienceData = user.experience || {};
+        const competitionData = user.competitionPrep || {};
+        const lifestyleData = user.lifestyle || {};
+
+        // Calculate TDEE
+        let tdee = 2000;
+        if (user.profile?.currentWeight && lifestyleData.jobType) {
+          const weight = user.profile.currentWeight;
+          const activity = { 'sedentary': 1.2, 'lightly-active': 1.375, 'moderately-active': 1.55, 'very-active': 1.725, 'extremely-active': 1.9 };
+          const multiplier = activity[lifestyleData.jobType] || 1.55;
+          tdee = Math.round(weight * 15 * multiplier);
+        }
+
+        // Build comprehensive FORGE prompt (same as programController)
+        const forgePrompt = `You are FORGE - the elite AI coach for ClockWork. Generate a COMPLETE structured training program.
+
+═══════════════════════════════════════════════════════════
+USER PROFILE: ${user.name}
+═══════════════════════════════════════════════════════════
+EXPERIENCE: ${experienceData.level || 'intermediate'} (${experienceData.yearsTraining || 1} years)
+GOAL: ${user.primaryGoal?.type || 'general-health'}
+SCHEDULE: ${scheduleData.daysPerWeek || 4} days/week, ${scheduleData.sessionDuration || 60} min sessions
+PREFERRED DAYS: ${scheduleData.preferredDays?.join(', ') || 'monday, tuesday, thursday, friday'}
+EQUIPMENT: ${user.equipment?.availableEquipment?.join(', ') || 'full commercial gym'}
+FAVORITE EXERCISES: ${exercisePrefs.favoriteExercises?.join(', ') || 'compound movements'}
+HATED EXERCISES (NEVER INCLUDE): ${exercisePrefs.hatedExercises?.join(', ') || 'none'}
+${user.personalRecords?.length > 0 ? `CURRENT LIFTS: ${user.personalRecords.map(pr => `${pr.exerciseName}: ${pr.weight}lbs`).join(', ')}` : ''}
+
+CRITICAL: Generate EXACTLY ${scheduleData.daysPerWeek || 4} training days per week for 8 weeks.
+Each workout MUST have 12-18 exercises including warmup, main-lift, accessory, and cooldown categories.
+
+Return ONLY valid JSON with this structure:
+{
+  "name": "8-Week ${user.primaryGoal?.type || 'Strength'} Program",
+  "durationWeeks": 8,
+  "periodization": { "model": "block", "phases": [{"name": "accumulation", "startWeek": 1, "endWeek": 3}, {"name": "strength", "startWeek": 4, "endWeek": 6}, {"name": "peak", "startWeek": 7, "endWeek": 8}] },
+  "nutritionPlan": {
+    "calorieTarget": ${tdee},
+    "macros": { "protein": ${Math.round((user.profile?.currentWeight || 180) * 1.0)}, "carbs": ${Math.round((tdee * 0.40) / 4)}, "fat": ${Math.round((tdee * 0.30) / 9)} },
+    "mealPlan": {
+      "breakfast": { "name": "Power Breakfast", "description": "High protein start", "calories": 600, "protein": 40, "carbs": 60, "fat": 15, "ingredients": ["4 eggs", "oats", "banana"], "prepTime": 15 },
+      "snack1": { "name": "Mid-Morning Fuel", "description": "Greek yogurt bowl", "calories": 250, "protein": 25, "carbs": 30, "fat": 5, "ingredients": ["greek yogurt", "granola", "honey"], "prepTime": 5 },
+      "lunch": { "name": "Muscle Builder", "description": "Chicken and rice", "calories": 700, "protein": 50, "carbs": 70, "fat": 12, "ingredients": ["chicken breast", "brown rice", "vegetables"], "prepTime": 25 },
+      "snack2": { "name": "Pre-Workout", "description": "Protein shake", "calories": 300, "protein": 30, "carbs": 35, "fat": 8, "ingredients": ["whey protein", "banana", "peanut butter"], "prepTime": 5 },
+      "dinner": { "name": "Recovery Meal", "description": "Salmon dinner", "calories": 650, "protein": 45, "carbs": 55, "fat": 18, "ingredients": ["salmon", "sweet potato", "greens"], "prepTime": 30 }
+    }
+  },
+  "weeklyTemplates": [
+    { "weekNumber": 1, "trainingDays": [...], "restDays": ["sunday", "wednesday", "saturday"] }
+  ]
+}`;
+
+        const aiResponse = await aiService.generateAIContent(forgePrompt, 'You are FORGE, the elite AI coach');
+
+        // Parse response
+        let programData;
+        try {
+          const jsonMatch = aiResponse.text.match(/\{[\s\S]*\}/);
+          programData = JSON.parse(jsonMatch ? jsonMatch[0] : aiResponse.text);
+        } catch (parseErr) {
+          throw new Error('Failed to parse program JSON');
+        }
+
+        // Create Program in database
+        const program = new Program({
+          userId,
+          name: programData.name || `${user.primaryGoal?.type || 'General'} Program`,
+          goal: user.primaryGoal?.type || 'general-health',
+          status: 'active',
+          startDate: new Date(),
+          durationWeeks: programData.durationWeeks || 8,
+          currentWeek: 1,
+          periodization: programData.periodization || { model: 'linear', phases: [] },
+          weeklyTemplates: programData.weeklyTemplates || [],
+          nutritionPlan: programData.nutritionPlan || {},
+          aiGenerated: true,
+          aiRationale: 'Generated via FORGE chat'
+        });
+
+        const savedProgram = await program.save();
+        console.log('[FORGE] Program created:', savedProgram._id);
+
+        // Update AI Coach reference
+        aiCoach.currentProgramId = savedProgram._id;
+        await aiCoach.save();
+
+        // Generate calendar events
+        const calendarEvents = await savedProgram.generateCalendarEvents();
+        console.log('[FORGE] Calendar events created:', calendarEvents.length);
+
+        // Generate meal events
+        let mealEvents = [];
+        if (programData.nutritionPlan?.mealPlan) {
+          const mealTypes = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+          const mealTimes = { breakfast: '08:00', snack1: '10:30', lunch: '12:30', snack2: '15:30', dinner: '18:30' };
+          const mealEventData = [];
+
+          for (let week = 0; week < savedProgram.durationWeeks; week++) {
+            for (let day = 0; day < 7; day++) {
+              const eventDate = new Date(savedProgram.startDate);
+              eventDate.setDate(eventDate.getDate() + (week * 7) + day);
+
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const checkDate = new Date(eventDate);
+              checkDate.setHours(0, 0, 0, 0);
+              if (checkDate < today) continue;
+
+              for (const mealType of mealTypes) {
+                const mealData = programData.nutritionPlan.mealPlan[mealType];
+                if (mealData) {
+                  mealEventData.push({
+                    userId,
+                    type: 'nutrition',
+                    title: mealData.name,
+                    date: eventDate,
+                    startTime: mealTimes[mealType],
+                    mealData: { mealType, ...mealData },
+                    programId: savedProgram._id,
+                    aiGenerated: true,
+                    status: 'scheduled'
+                  });
+                }
+              }
+            }
+          }
+
+          if (mealEventData.length > 0) {
+            mealEvents = await CalendarEvent.insertMany(mealEventData);
+            console.log('[FORGE] Meal events created:', mealEvents.length);
+          }
+        }
+
+        // Update nutrition targets
+        const nutrition = await Nutrition.getOrCreateForUser(userId);
+        if (programData.nutritionPlan) {
+          nutrition.targets = {
+            calories: programData.nutritionPlan.calorieTarget,
+            protein: programData.nutritionPlan.macros?.protein || 0,
+            carbs: programData.nutritionPlan.macros?.carbs || 0,
+            fat: programData.nutritionPlan.macros?.fat || 0,
+            calculatedAt: new Date()
+          };
+          await nutrition.save();
+        }
+
+        const totalEvents = calendarEvents.length + mealEvents.length;
+
+        actionResult = {
+          action: 'PROGRAM_GENERATED',
+          programId: savedProgram._id,
+          stats: {
+            calendarEventsCreated: calendarEvents.length,
+            mealEventsCreated: mealEvents.length,
+            totalEventsCreated: totalEvents,
+            weeksPlanned: savedProgram.durationWeeks
+          }
+        };
+
+        actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${savedProgram.durationWeeks}-week program with ${calendarEvents.length} workouts and ${mealEvents.length} meals (${totalEvents} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
+
+      } catch (programErr) {
+        console.error('[FORGE] Full program generation error:', programErr);
+        actionPromptAddition = `\n\n[SYSTEM: Program generation encountered an error: ${programErr.message}. Apologize and suggest trying again.]`;
+      }
+    }
+
     // Execute actions if detected
-    if (actionIntent === 'GENERATE_CALENDAR') {
+    else if (actionIntent === 'GENERATE_CALENDAR') {
       try {
         console.log('[FORGE] Executing action: GENERATE_CALENDAR');
 
