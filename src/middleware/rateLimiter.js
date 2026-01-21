@@ -7,6 +7,20 @@ const rateLimit = require('express-rate-limit');
 // RATE LIMITER CONFIGURATIONS
 // ============================================
 
+// Custom key generator for proxied environments (Railway, Heroku, etc.)
+// Uses X-Forwarded-For header to get real client IP
+const proxyKeyGenerator = (req) => {
+    // Get real IP from X-Forwarded-For header (set by Railway proxy)
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        // X-Forwarded-For can contain multiple IPs, use the first one (original client)
+        return forwardedFor.split(',')[0].trim();
+    }
+    // Fallback to req.ip if no proxy header
+    return req.ip || 'unknown';
+};
+
+
 /**
  * Auth Registration Rate Limiter
  * Prevents spam account creation
@@ -22,7 +36,8 @@ const registerLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -40,7 +55,8 @@ const loginLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -58,7 +74,8 @@ const otpLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -76,7 +93,8 @@ const passwordResetLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -94,7 +112,8 @@ const aiGenerationLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -112,7 +131,8 @@ const aiQueryLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -130,7 +150,8 @@ const coachInviteLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false
+    skipSuccessfulRequests: false,
+    keyGenerator: proxyKeyGenerator
 });
 
 /**
@@ -148,6 +169,7 @@ const globalLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: proxyKeyGenerator,
     skip: (req) => {
         // Skip rate limiting for health check endpoint
         return req.path === '/api/health';
