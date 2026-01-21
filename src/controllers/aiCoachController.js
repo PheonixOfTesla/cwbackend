@@ -719,59 +719,146 @@ exports.askCoach = async (req, res) => {
         const programController = require('./programController');
         const Nutrition = require('../models/Nutrition');
 
-        // Gather user data
+        // Gather ALL user data from registration/onboarding
         const scheduleData = user.schedule || {};
         const exercisePrefs = user.exercisePreferences || {};
         const bodyCompData = user.bodyComposition || {};
         const experienceData = user.experience || {};
         const competitionData = user.competitionPrep || {};
         const lifestyleData = user.lifestyle || {};
+        const limitationsData = user.limitations || {};
+        const dietaryPrefs = user.dietaryPreferences || {};
+        const profileData = user.profile || {};
 
-        // Calculate TDEE
+        // Build injury/limitation strings
+        const injuryList = limitationsData.injuries?.map(inj =>
+          `${inj.bodyPart} (${inj.severity}): ${inj.description}${inj.avoidMovements?.length ? ` - AVOID: ${inj.avoidMovements.join(', ')}` : ''}`
+        ).join('; ') || 'none';
+        const exercisesToAvoid = [
+          ...(limitationsData.exercisesToAvoid || []),
+          ...(exercisePrefs.hatedExercises || [])
+        ].filter(Boolean);
+
+        // Calculate TDEE with more accurate formula
         let tdee = 2000;
-        if (user.profile?.currentWeight && lifestyleData.jobType) {
-          const weight = user.profile.currentWeight;
-          const activity = { 'sedentary': 1.2, 'lightly-active': 1.375, 'moderately-active': 1.55, 'very-active': 1.725, 'extremely-active': 1.9 };
-          const multiplier = activity[lifestyleData.jobType] || 1.55;
-          tdee = Math.round(weight * 15 * multiplier);
+        const weight = profileData.currentWeight || 180;
+        const height = profileData.height || 70; // inches
+        const age = profileData.dateOfBirth ? Math.floor((Date.now() - new Date(profileData.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 30;
+        const gender = profileData.gender || 'male';
+
+        // Mifflin-St Jeor formula
+        let bmr;
+        if (gender === 'female') {
+          bmr = (10 * weight * 0.453592) + (6.25 * height * 2.54) - (5 * age) - 161;
+        } else {
+          bmr = (10 * weight * 0.453592) + (6.25 * height * 2.54) - (5 * age) + 5;
         }
 
-        // Build comprehensive FORGE prompt (same as programController)
-        const forgePrompt = `You are FORGE - the elite AI coach for ClockWork. Generate a COMPLETE structured training program.
+        const activityMultipliers = {
+          'sedentary': 1.2, 'lightly-active': 1.375, 'moderately-active': 1.55,
+          'very-active': 1.725, 'extremely-active': 1.9
+        };
+        const daysPerWeek = scheduleData.daysPerWeek || 4;
+        const estimatedActivity = daysPerWeek >= 5 ? 'very-active' : daysPerWeek >= 3 ? 'moderately-active' : 'lightly-active';
+        const multiplier = activityMultipliers[lifestyleData.jobType || estimatedActivity] || 1.55;
+        tdee = Math.round(bmr * multiplier);
+
+        // Adjust TDEE for goal
+        if (user.primaryGoal?.type === 'lose-fat') tdee = Math.round(tdee * 0.8); // 20% deficit
+        else if (user.primaryGoal?.type === 'build-muscle') tdee = Math.round(tdee * 1.1); // 10% surplus
+
+        // Calculate macros based on goal
+        let proteinPerLb = 1.0;
+        if (user.primaryGoal?.type === 'build-muscle' || user.primaryGoal?.type === 'build-strength') proteinPerLb = 1.2;
+        const protein = Math.round(weight * proteinPerLb);
+        const fat = Math.round((tdee * 0.25) / 9);
+        const carbs = Math.round((tdee - (protein * 4) - (fat * 9)) / 4);
+
+        // Build comprehensive FORGE prompt with ALL user data
+        const forgePrompt = `You are FORGE - the elite AI coach for ClockWork. Generate a COMPLETE structured training program TAILORED to this specific user.
 
 ═══════════════════════════════════════════════════════════
 USER PROFILE: ${user.name}
 ═══════════════════════════════════════════════════════════
-EXPERIENCE: ${experienceData.level || 'intermediate'} (${experienceData.yearsTraining || 1} years)
+DEMOGRAPHICS:
+- Gender: ${profileData.gender || 'not specified'}
+- Age: ${age} years
+- Height: ${height} inches
+- Current Weight: ${weight} lbs
+- Target Weight: ${user.primaryGoal?.targetWeight || 'not specified'}
+
+TRAINING EXPERIENCE:
+- Level: ${experienceData.level || 'intermediate'} (${experienceData.yearsTraining || 1} years training)
+- Primary Discipline: ${experienceData.primaryDiscipline || 'general-fitness'}
+- Secondary: ${experienceData.secondaryDisciplines?.join(', ') || 'none'}
+
 GOAL: ${user.primaryGoal?.type || 'general-health'}
-SCHEDULE: ${scheduleData.daysPerWeek || 4} days/week, ${scheduleData.sessionDuration || 60} min sessions
-PREFERRED DAYS: ${scheduleData.preferredDays?.join(', ') || 'monday, tuesday, thursday, friday'}
-EQUIPMENT: ${user.equipment?.availableEquipment?.join(', ') || 'full commercial gym'}
-FAVORITE EXERCISES: ${exercisePrefs.favoriteExercises?.join(', ') || 'compound movements'}
-HATED EXERCISES (NEVER INCLUDE): ${exercisePrefs.hatedExercises?.join(', ') || 'none'}
+${user.primaryGoal?.competition ? `COMPETITION: ${user.primaryGoal.competition.type} on ${user.primaryGoal.competition.date} (${user.primaryGoal.competition.federation})` : ''}
+${user.primaryGoal?.strengthTargets ? `STRENGTH TARGETS: Squat ${user.primaryGoal.strengthTargets.squat?.target || '?'}lbs, Bench ${user.primaryGoal.strengthTargets.bench?.target || '?'}lbs, Deadlift ${user.primaryGoal.strengthTargets.deadlift?.target || '?'}lbs` : ''}
+
+SCHEDULE:
+- Days per week: ${scheduleData.daysPerWeek || 4}
+- Session duration: ${scheduleData.sessionDuration || 60} minutes
+- Preferred days: ${scheduleData.preferredDays?.join(', ') || 'monday, tuesday, thursday, friday'}
+- Preferred time: ${scheduleData.preferredTime || 'flexible'}
+
+EQUIPMENT:
+- Location: ${user.equipment?.trainingLocation || 'commercial-gym'}
+- Available: ${user.equipment?.availableEquipment?.join(', ') || 'full commercial gym'}
+${user.equipment?.limitations ? `- Limitations: ${user.equipment.limitations}` : ''}
+
+EXERCISE PREFERENCES:
+- Favorites: ${exercisePrefs.favoriteExercises?.join(', ') || 'compound movements'}
+- Cardio preference: ${exercisePrefs.cardioPreference || 'mixed'}
+${exercisePrefs.cardioActivities?.length ? `- Cardio activities: ${exercisePrefs.cardioActivities.join(', ')}` : ''}
+
+⚠️ INJURIES & LIMITATIONS (CRITICAL - MUST RESPECT):
+${injuryList !== 'none' ? `- Active injuries: ${injuryList}` : '- No reported injuries'}
+${limitationsData.medicalConditions?.length ? `- Medical conditions: ${limitationsData.medicalConditions.join(', ')}` : ''}
+${exercisesToAvoid.length ? `- NEVER INCLUDE THESE EXERCISES: ${exercisesToAvoid.join(', ')}` : ''}
+
 ${user.personalRecords?.length > 0 ? `CURRENT LIFTS: ${user.personalRecords.map(pr => `${pr.exerciseName}: ${pr.weight}lbs`).join(', ')}` : ''}
 
-CRITICAL: Generate EXACTLY ${scheduleData.daysPerWeek || 4} training days per week for 8 weeks.
-Each workout MUST have 12-18 exercises including warmup, main-lift, accessory, and cooldown categories.
+DIETARY PREFERENCES (for meal plan):
+- Diet type: ${dietaryPrefs.dietType || 'flexible'}
+${dietaryPrefs.allergies?.length ? `- ALLERGIES (NEVER INCLUDE): ${dietaryPrefs.allergies.join(', ')}` : ''}
+${dietaryPrefs.intolerances?.length ? `- Intolerances: ${dietaryPrefs.intolerances.join(', ')}` : ''}
+${dietaryPrefs.dislikedFoods?.length ? `- Disliked foods (avoid): ${dietaryPrefs.dislikedFoods.join(', ')}` : ''}
+- Cuisine preferences: ${dietaryPrefs.cuisinePreferences?.join(', ') || 'flexible'}
+- Cooking skill: ${dietaryPrefs.cookingSkill || 'intermediate'}
+- Meal prep time: ${dietaryPrefs.mealPrepTime || 'moderate'}
+- Budget: ${dietaryPrefs.budget || 'moderate'}
+- Meals per day: ${dietaryPrefs.mealsPerDay || 5}
+
+═══════════════════════════════════════════════════════════
+CRITICAL REQUIREMENTS:
+═══════════════════════════════════════════════════════════
+1. Generate EXACTLY ${scheduleData.daysPerWeek || 4} training days per week for 8 weeks
+2. Each workout MUST have 12-18 exercises including warmup, main-lift, accessory, and cooldown
+3. NEVER include exercises the user hates or needs to avoid due to injury
+4. Respect all dietary restrictions in meal plan
+5. Tailor intensity to their experience level (${experienceData.level || 'intermediate'})
+6. Program should progress toward their goal: ${user.primaryGoal?.type || 'general-health'}
 
 Return ONLY valid JSON with this structure:
 {
-  "name": "8-Week ${user.primaryGoal?.type || 'Strength'} Program",
+  "name": "8-Week ${user.primaryGoal?.type || 'Strength'} Program for ${user.name?.split(' ')[0] || 'You'}",
   "durationWeeks": 8,
   "periodization": { "model": "block", "phases": [{"name": "accumulation", "startWeek": 1, "endWeek": 3}, {"name": "strength", "startWeek": 4, "endWeek": 6}, {"name": "peak", "startWeek": 7, "endWeek": 8}] },
   "nutritionPlan": {
     "calorieTarget": ${tdee},
-    "macros": { "protein": ${Math.round((user.profile?.currentWeight || 180) * 1.0)}, "carbs": ${Math.round((tdee * 0.40) / 4)}, "fat": ${Math.round((tdee * 0.30) / 9)} },
+    "macros": { "protein": ${protein}, "carbs": ${carbs}, "fat": ${fat} },
     "mealPlan": {
-      "breakfast": { "name": "Power Breakfast", "description": "High protein start", "calories": 600, "protein": 40, "carbs": 60, "fat": 15, "ingredients": ["4 eggs", "oats", "banana"], "prepTime": 15 },
-      "snack1": { "name": "Mid-Morning Fuel", "description": "Greek yogurt bowl", "calories": 250, "protein": 25, "carbs": 30, "fat": 5, "ingredients": ["greek yogurt", "granola", "honey"], "prepTime": 5 },
-      "lunch": { "name": "Muscle Builder", "description": "Chicken and rice", "calories": 700, "protein": 50, "carbs": 70, "fat": 12, "ingredients": ["chicken breast", "brown rice", "vegetables"], "prepTime": 25 },
-      "snack2": { "name": "Pre-Workout", "description": "Protein shake", "calories": 300, "protein": 30, "carbs": 35, "fat": 8, "ingredients": ["whey protein", "banana", "peanut butter"], "prepTime": 5 },
-      "dinner": { "name": "Recovery Meal", "description": "Salmon dinner", "calories": 650, "protein": 45, "carbs": 55, "fat": 18, "ingredients": ["salmon", "sweet potato", "greens"], "prepTime": 30 }
+      "breakfast": { "name": "...", "description": "...", "calories": ${Math.round(tdee * 0.25)}, "protein": ${Math.round(protein * 0.2)}, "carbs": ..., "fat": ..., "ingredients": [...], "prepTime": ... },
+      "snack1": { ... },
+      "lunch": { ... },
+      "snack2": { ... },
+      "dinner": { ... }
     }
   },
   "weeklyTemplates": [
-    { "weekNumber": 1, "trainingDays": [...], "restDays": ["sunday", "wednesday", "saturday"] }
+    { "weekNumber": 1, "trainingDays": [...], "restDays": [...] },
+    ... (all 8 weeks)
   ]
 }`;
 
