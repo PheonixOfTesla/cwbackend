@@ -160,6 +160,7 @@ const userRoutes = require('./src/routes/user');
 // NEW: Coach & AI Coach (B2C/B2B Core)
 const coachRoutes = require('./src/routes/coach');
 const aiCoachRoutes = require('./src/routes/aiCoach');
+const programRoutes = require('./src/routes/programs');
 
 // Fitness Features
 const workoutRoutes = require('./src/routes/workout');
@@ -201,6 +202,7 @@ app.use('/api/users', userRoutes);
 // NEW: Coach & AI Coach Routes (THE CORE B2C/B2B FEATURES)
 app.use('/api/coach', coachRoutes);
 app.use('/api/ai-coach', aiCoachRoutes);
+app.use('/api/programs', programRoutes);
 
 // Fitness
 app.use('/api/workouts', workoutRoutes);
@@ -249,6 +251,7 @@ app.get('/api/health', async (req, res) => {
             users: '✅',
             coach: '✅ NEW - Coach management',
             'ai-coach': '✅ NEW - AI coaching',
+            programs: '✅ NEW - FORGE program generation & management',
             workouts: '✅',
             exercises: '✅',
             nutrition: '✅',
@@ -300,6 +303,7 @@ app.get('/api', (req, res) => {
             users: '/api/users',
             coach: '/api/coach [NEW]',
             'ai-coach': '/api/ai-coach [NEW]',
+            programs: '/api/programs [NEW - FORGE]',
             workouts: '/api/workouts',
             exercises: '/api/exercises',
             nutrition: '/api/nutrition',
@@ -432,6 +436,10 @@ process.on('SIGTERM', () => {
 const startServer = async () => {
     try {
         await connectDB();
+
+        // Initialize program scheduling jobs (weekly auto-progression, etc.)
+        const { initializeProgramJobs } = require('./src/jobs/programProgressionJob');
+        initializeProgramJobs();
 
         server.listen(PORT, () => {
             console.log(`

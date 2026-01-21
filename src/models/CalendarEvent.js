@@ -31,6 +31,16 @@ const calendarEventSchema = new mongoose.Schema({
   // Link to actual workout if type is 'workout'
   workoutId: { type: mongoose.Schema.Types.ObjectId, ref: 'Workout' },
 
+  // Link to Program (if generated from a program)
+  programId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Program',
+    default: null
+  },
+
+  // Week number in program (if applicable)
+  weekNumber: Number,
+
   // Workout exercises (for inline display without needing to load Workout)
   exercises: [{
     name: String,
@@ -98,6 +108,7 @@ const calendarEventSchema = new mongoose.Schema({
 calendarEventSchema.index({ userId: 1, date: 1 });
 calendarEventSchema.index({ userId: 1, date: 1, type: 1 });
 calendarEventSchema.index({ userId: 1, status: 1, date: 1 });
+calendarEventSchema.index({ programId: 1, weekNumber: 1 });  // For program-based queries
 
 // Virtual for checking if event is in the past
 calendarEventSchema.virtual('isPast').get(function() {

@@ -254,6 +254,13 @@ const aiCoachSchema = new mongoose.Schema({
     },
     nextDeloadWeek: Number,
     programGoal: String
+  },
+
+  // Reference to new Program model (persistent)
+  currentProgramId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Program',
+    default: null
   }
 }, {
   timestamps: true
@@ -368,7 +375,8 @@ aiCoachSchema.virtual('aiContext').get(function() {
       injuries: this.trainingHistory.injuryHistory.filter(i => !i.recovered)
     },
     recentAdaptations: this.adaptations.slice(-5),
-    keyLearnings: this.learnings.filter(l => l.confidence > 0.7)
+    keyLearnings: this.learnings.filter(l => l.confidence > 0.7),
+    currentProgramId: this.currentProgramId
   };
 });
 

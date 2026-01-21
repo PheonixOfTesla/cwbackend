@@ -2,6 +2,7 @@
 // This is THE CORE VALUE PROP - AI that coaches individuals
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
+const Program = require('../models/Program');
 const recoveryService = require('../services/recoveryService');
 const prDetectionService = require('../services/prDetectionService');
 const aiService = require('../services/aiService');
@@ -671,6 +672,15 @@ exports.askCoach = async (req, res) => {
       });
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // CHECK FOR ACTIVE PROGRAM
+    // ═══════════════════════════════════════════════════════════
+    let activeProgram = null;
+    if (aiCoach.currentProgramId) {
+      activeProgram = await Program.findById(aiCoach.currentProgramId);
+    }
+    const hasActiveProgram = activeProgram && activeProgram.status === 'active';
+
     // Detect if this is an action request
     const actionIntent = detectActionIntent(question);
     let actionResult = null;
@@ -985,6 +995,30 @@ ${conversationHistory.map(msg => `${msg.role === 'user' ? 'USER' : 'FORGE'}: ${m
 `;
     }
 
+    // Build prompt with program context if available
+    let programContext = '';
+    if (hasActiveProgram) {
+      const currentPhase = activeProgram.calculateCurrentPhase();
+      programContext = `
+
+═══════════════════════════════════════════════════════════
+ACTIVE PROGRAM: "${activeProgram.name}"
+═══════════════════════════════════════════════════════════
+- Duration: ${activeProgram.durationWeeks} weeks
+- Current Week: ${activeProgram.currentWeek} (${activeProgram.percentComplete}% complete)
+- Weeks Remaining: ${activeProgram.weeksRemaining}
+- Current Phase: ${currentPhase?.name || 'unknown'}
+- Goal: ${activeProgram.goal}
+- Periodization Model: ${activeProgram.periodization?.model}
+${activeProgram.competitionPrep?.competitionDate ? `- Competition Date: ${new Date(activeProgram.competitionPrep.competitionDate).toLocaleDateString()}` : ''}
+
+When answering the user, remember they are CURRENTLY IN THIS PROGRAM. Your coaching should reference their program context, help them execute it effectively, and suggest adjustments only if absolutely necessary.`;
+    } else {
+      programContext = `
+
+⚠️ USER HAS NO ACTIVE PROGRAM. They should generate one using "Create my program" or "Generate my training plan". When appropriate, suggest this.`;
+    }
+
     const prompt = `${FORGE_IDENTITY}
 
 CRITICAL RULES:
@@ -1003,6 +1037,7 @@ USER PROFILE (${user.name}):
 - Current Streak: ${aiCoach.trainingHistory?.currentStreak || 0} days
 - Training Days: ${user.schedule?.daysPerWeek || 4} days/week
 - Preferred Days: ${user.schedule?.preferredDays?.join(', ') || 'flexible'}
+${programContext}
 ${conversationContext}
 ${context ? `CONTEXT FROM APP: ${context}` : ''}
 
