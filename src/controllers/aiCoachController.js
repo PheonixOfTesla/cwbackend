@@ -157,6 +157,7 @@ exports.generateProgram = async (req, res) => {
     // Get user data
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
+    const features = user.getSubscriptionFeatures();
 
     // Check and expire trial if needed
     await user.checkTrialExpiration();
@@ -361,6 +362,7 @@ exports.generateWorkout = async (req, res) => {
 
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
+    const features = user.getSubscriptionFeatures();
 
     // Check and expire trial if needed
     await user.checkTrialExpiration();
@@ -595,6 +597,7 @@ exports.askCoach = async (req, res) => {
 
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
+    const features = user.getSubscriptionFeatures();
 
     // Check and expire trial if needed
     await user.checkTrialExpiration();
