@@ -371,7 +371,8 @@ exports.completeOnboarding = async (req, res) => {
         createdGoal = await Goal.create({
           ...goalData,
           clientId: userId,
-          createdBy: userId
+          createdBy: userId,
+          assignedBy: userId  // Self-assigned goal
         });
       } catch (goalError) {
         console.error('Goal creation error:', goalError);

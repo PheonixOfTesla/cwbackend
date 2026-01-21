@@ -12,8 +12,8 @@ const goalSchema = new mongoose.Schema({
     },
     assignedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+        ref: 'User'
+        // Not required - for self-created goals, this equals clientId
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
