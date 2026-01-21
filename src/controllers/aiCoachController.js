@@ -273,19 +273,51 @@ ${intensity ? `INTENSITY LEVEL: ${intensity}` : ''}
 
 IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
 
-EXERCISE COUNT PER WORKOUT (based on experience level):
-${user.experience?.level === 'beginner' ? '- Beginner: 4-6 exercises per workout (keep it simple, focus on form)' : ''}
-${user.experience?.level === 'intermediate' ? '- Intermediate: 6-8 exercises per workout (balanced volume and variety)' : ''}
-${user.experience?.level === 'advanced' ? '- Advanced: 7-10 exercises per workout (higher volume, more variety)' : ''}
-${!user.experience?.level ? '- Default: 6-8 exercises per workout' : ''}
+═══════════════════════════════════════════════════════════
+WORKOUT STRUCTURE REQUIREMENTS (CRITICAL):
+═══════════════════════════════════════════════════════════
+Each workout MUST include:
+
+1. WARMUP (2-3 exercises):
+   - Dynamic stretches, mobility work, activation exercises
+   - Examples: Band Pull-Aparts, Leg Swings, Cat-Cow, Arm Circles
+   - 1-2 sets, 8-12 reps or 30-60 seconds
+
+2. MAIN WORK (5-9 exercises based on goal):
+   ${user.primaryGoal?.type === 'build-strength' ? '- Strength: 5-7 compound-focused exercises (heavy weight, lower reps)' : ''}
+   ${user.primaryGoal?.type === 'build-muscle' ? '- Hypertrophy: 6-9 exercises (mix of compound and isolation, higher volume)' : ''}
+   ${user.primaryGoal?.type === 'lose-fat' ? '- Fat Loss: 6-8 exercises (circuit style, minimal rest, high intensity)' : ''}
+   ${user.primaryGoal?.type === 'competition-prep' ? '- Competition: 5-7 exercises (specificity to competition lifts, technical work)' : ''}
+   ${!user.primaryGoal?.type || user.primaryGoal?.type === 'general-health' ? '- General: 6-8 exercises (balanced mix of strength and conditioning)' : ''}
+
+3. POST-WORKOUT STRETCH (2-3 exercises):
+   - Static stretches targeting muscles worked
+   - Examples: Hamstring Stretch, Hip Flexor Stretch, Chest Doorway Stretch
+   - Hold 30-60 seconds each
+
+4. CARDIO (if applicable):
+   ${needsCardio || exercisePrefs.cardioPreference !== 'none' ? `- Include ${exercisePrefs.cardioPreference || 'LISS'} cardio
+   - Duration: 15-30 minutes
+   - Frequency: ${needsCardio ? '3-4x per week' : '2-3x per week'}
+   - Examples: Treadmill, Rowing, Bike, Stairmaster` : '- Optional: Add 10-15 min cardio based on recovery'}
+
+═══════════════════════════════════════════════════════════
+NUTRITION RECOMMENDATIONS (based on onboarding):
+═══════════════════════════════════════════════════════════
+${bodyComp.goal === 'lose-weight' ? '- CUTTING: Slight caloric deficit, high protein (0.8-1g per lb bodyweight)' : ''}
+${bodyComp.goal === 'gain-weight' ? '- BULKING: Caloric surplus, prioritize protein and carbs around training' : ''}
+${bodyComp.goal === 'maintain' ? '- MAINTENANCE: Balanced macros, focus on nutrient timing' : ''}
+- Dietary preferences: ${user.dietaryPreferences?.join(', ') || 'omnivore'}
+- Meal timing: Pre/post workout nutrition critical for performance
 
 Generate a structured program with:
 1. Program overview and goals
 2. Weekly structure
-3. Each workout with the appropriate number of exercises based on experience level
-4. Include exercises, sets, reps, and rest periods
+3. Each workout with WARMUP, MAIN WORK (5-9 exercises), STRETCHES, and CARDIO sections
+4. Include exercises, sets, reps, and rest periods for ALL sections
 5. Progression plan
 6. Deload recommendations
+7. Nutrition guidelines based on user goals
 
 Return as JSON with this structure:
 {
@@ -435,24 +467,43 @@ ${recoveryRecommendation === 'full-intensity' ? '- Normal recovery - train as pl
 
 IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
 
-EXERCISE COUNT FOR MAIN WORKOUT (based on experience level):
-${user.experience?.level === 'beginner' ? '- Beginner: 4-6 exercises (keep it simple, focus on form)' : ''}
-${user.experience?.level === 'intermediate' ? '- Intermediate: 6-8 exercises (balanced volume and variety)' : ''}
-${user.experience?.level === 'advanced' ? '- Advanced: 7-10 exercises (higher volume, more variety)' : ''}
-${!user.experience?.level ? '- Default: 6-8 exercises' : ''}
+═══════════════════════════════════════════════════════════
+WORKOUT STRUCTURE REQUIREMENTS (CRITICAL):
+═══════════════════════════════════════════════════════════
+Generate a complete workout with these sections:
+
+1. WARMUP (2-3 exercises):
+   - Dynamic stretches, mobility drills, activation exercises
+   - Examples: Band Pull-Aparts, Leg Swings, Cat-Cow Stretch, Arm Circles
+   - 1-2 sets, 8-12 reps or 30-60 seconds each
+
+2. MAIN WORKOUT (5-9 exercises based on goal and experience):
+   ${user.experience?.level === 'beginner' ? '- Beginner: 5-6 exercises (compound movements, perfect form)' : ''}
+   ${user.experience?.level === 'intermediate' ? '- Intermediate: 6-8 exercises (mix compound and isolation)' : ''}
+   ${user.experience?.level === 'advanced' ? '- Advanced: 7-9 exercises (higher volume and variety)' : ''}
+   ${!user.experience?.level ? '- Default: 6-8 exercises' : ''}
+   - Include sets, reps, RPE, rest periods, and coaching notes
+
+3. POST-WORKOUT STRETCH (2-3 exercises):
+   - Static stretches targeting muscles worked today
+   - Examples: Hamstring Stretch, Hip Flexor Stretch, Chest Stretch, Quad Stretch
+   - Hold 30-60 seconds each
+
+4. CARDIO (if needed):
+   ${needsCardio ? `- REQUIRED: ${exercisePrefs.cardioPreference || 'LISS'} cardio, 15-25 minutes` : '- Optional: Light cardio if time permits'}
 
 Return JSON:
 {
   "workoutName": "string",
   "recoveryAdjusted": ${recoveryRecommendation !== 'full-intensity'},
   "intensityLevel": "${recoveryRecommendation}",
-  "warmup": [{"exercise": "string", "duration": "string"}],
+  "warmup": [{"exercise": "string", "sets": "1-2", "duration": "30-60 sec"}],
   "mainWorkout": [{"exercise": "string", "sets": number, "reps": "string", "rpe": number, "rest": "string", "notes": "string"}],
+  "stretches": [{"exercise": "string", "duration": "30-60 sec", "notes": "string"}],
   ${needsCardio ? '"cardio": {"type": "string", "duration": "string", "intensity": "string"},' : ''}
-  "cooldown": [{"exercise": "string", "duration": "string"}],
   "estimatedDuration": number,
   "difficulty": "beginner|intermediate|advanced",
-  "coachingNote": "string - personalized note based on their recovery"
+  "coachingNote": "string - personalized note based on their recovery and goals"
 }`;
 
     // Use AI with automatic fallback
