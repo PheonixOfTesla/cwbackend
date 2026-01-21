@@ -7,8 +7,13 @@ const rateLimit = require('express-rate-limit');
 // RATE LIMITER CONFIGURATIONS
 // ============================================
 
-// No custom key generator needed - express-rate-limit handles proxies automatically
-// when app.set('trust proxy', true) is enabled in server.js
+// Trust proxy configuration - Railway/production environments
+// express-rate-limit will automatically handle X-Forwarded-For headers
+const rateLimitConfig = {
+  standardHeaders: 'draft-7', // Use draft-7 standard (RateLimit-* headers)
+  legacyHeaders: false,
+  // trust proxy is handled by app.set('trust proxy', true) in server.js
+}
 
 
 /**
@@ -17,6 +22,7 @@ const rateLimit = require('express-rate-limit');
  * Limit: 15 registrations per hour per IP (tripled from 5)
  */
 const registerLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 15,
     message: {
@@ -24,8 +30,6 @@ const registerLimiter = rateLimit({
         message: 'Too many registration attempts. Please try again in an hour.',
         retryAfter: '1 hour'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -35,6 +39,7 @@ const registerLimiter = rateLimit({
  * Limit: 30 login attempts per 15 minutes per IP (tripled from 10)
  */
 const loginLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 30,
     message: {
@@ -42,8 +47,6 @@ const loginLimiter = rateLimit({
         message: 'Too many login attempts. Please try again in 15 minutes.',
         retryAfter: '15 minutes'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -53,6 +56,7 @@ const loginLimiter = rateLimit({
  * Limit: 15 OTP attempts per 15 minutes per IP (tripled from 5)
  */
 const otpLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 15,
     message: {
@@ -60,8 +64,6 @@ const otpLimiter = rateLimit({
         message: 'Too many OTP verification attempts. Please try again in 15 minutes.',
         retryAfter: '15 minutes'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -71,6 +73,7 @@ const otpLimiter = rateLimit({
  * Limit: 9 password resets per hour per IP (tripled from 3)
  */
 const passwordResetLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 9,
     message: {
@@ -78,8 +81,6 @@ const passwordResetLimiter = rateLimit({
         message: 'Too many password reset attempts. Please try again in an hour.',
         retryAfter: '1 hour'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -89,6 +90,7 @@ const passwordResetLimiter = rateLimit({
  * Limit: 60 generations per day per IP (tripled from 20)
  */
 const aiGenerationLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 24 * 60 * 60 * 1000, // 24 hours
     max: 60,
     message: {
@@ -96,8 +98,6 @@ const aiGenerationLimiter = rateLimit({
         message: 'AI generation limit reached. You can generate 60 programs per day.',
         retryAfter: '24 hours'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -107,6 +107,7 @@ const aiGenerationLimiter = rateLimit({
  * Limit: 90 AI queries per day per IP (tripled from 30)
  */
 const aiQueryLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 24 * 60 * 60 * 1000, // 24 hours
     max: 90,
     message: {
@@ -114,8 +115,6 @@ const aiQueryLimiter = rateLimit({
         message: 'AI query limit reached. You can ask 90 questions per day.',
         retryAfter: '24 hours'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -125,6 +124,7 @@ const aiQueryLimiter = rateLimit({
  * Limit: 30 invites per hour per IP (tripled from 10)
  */
 const coachInviteLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 30,
     message: {
@@ -132,8 +132,6 @@ const coachInviteLimiter = rateLimit({
         message: 'Too many invite attempts. Please try again in an hour.',
         retryAfter: '1 hour'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: false
 });
 
@@ -143,6 +141,7 @@ const coachInviteLimiter = rateLimit({
  * Limit: 100 requests per 15 minutes per IP
  */
 const globalLimiter = rateLimit({
+    ...rateLimitConfig,
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100,
     message: {
@@ -150,8 +149,6 @@ const globalLimiter = rateLimit({
         message: 'Too many requests from this IP. Please try again later.',
         retryAfter: '15 minutes'
     },
-    standardHeaders: true,
-    legacyHeaders: false,
     skip: (req) => {
         // Skip rate limiting for health check endpoint
         return req.path === '/api/health';
