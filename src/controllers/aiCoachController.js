@@ -51,10 +51,11 @@ REMEMBER: You're their coach and partner in this. Build the relationship. When t
 
 
 
-// Helper: Generate content with Kimi K2 (OpenRouter) + 30s timeout
+// Helper: Generate content with Kimi K2 (OpenRouter) + retry logic
 const AI_TIMEOUT_MS = 30000; // 30 seconds
+const MAX_RETRIES = 3;
 
-async function generateAIContent(prompt, systemPrompt = null) {
+async function generateAIContent(prompt, systemPrompt = null, retryCount = 0) {
   try {
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -81,11 +82,22 @@ async function generateAIContent(prompt, systemPrompt = null) {
     console.log('[FORGE] Response from Kimi K2 (FREE)');
     return { text: completion.choices[0].message.content, source: 'kimi-k2' };
   } catch (error) {
+    // Handle timeout
     if (error.message === 'AI_TIMEOUT') {
       console.error('[FORGE] Kimi K2 timeout after 30s');
       throw new Error('FORGE is taking too long - please try again');
     }
-    console.error('[FORGE] Kimi K2 error:', error.message);
+
+    // Handle rate limiting (429) with retry
+    if (error.status === 429 && retryCount < MAX_RETRIES) {
+      const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+      console.log(`[FORGE] Rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return generateAIContent(prompt, systemPrompt, retryCount + 1);
+    }
+
+    // Handle other errors
+    console.error('[FORGE] Kimi K2 error:', error.status || error.message);
     throw new Error('FORGE is temporarily unavailable - please try again');
   }
 }
