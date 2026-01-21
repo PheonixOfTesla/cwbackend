@@ -66,6 +66,9 @@ const corsOptions = {
     maxAge: 86400
 };
 
+// Trust proxy for Railway/production deployments (fixes rate limiting)
+app.set('trust proxy', true);
+
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
@@ -89,8 +92,6 @@ const connectDB = async () => {
         const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/clockwork-genesis';
 
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 15000,  // Increased from 5s to 15s
             socketTimeoutMS: 60000,           // Increased from 45s to 60s
             maxPoolSize: 50,

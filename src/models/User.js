@@ -601,7 +601,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Indexes - Updated for new structure
-userSchema.index({ email: 1 });
+// Note: email index is created automatically by 'unique: true' on the field
 userSchema.index({ userType: 1 });
 userSchema.index({ coachId: 1 });
 userSchema.index({ 'subscription.tier': 1 });

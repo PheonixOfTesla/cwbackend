@@ -174,7 +174,7 @@ const nutritionSchema = new mongoose.Schema({
 });
 
 // Indexes
-nutritionSchema.index({ userId: 1 });
+// Note: userId index is created automatically by 'unique: true' on the field
 nutritionSchema.index({ clientId: 1 });
 nutritionSchema.index({ 'dailyLogs.date': -1 });
 

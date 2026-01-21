@@ -4,8 +4,8 @@ const calendarEventSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
+    // Note: Index is created by compound indexes below (userId + date, etc.)
   },
 
   // Event Type
