@@ -118,6 +118,88 @@ COMPETITION PREP (CRITICAL)
 ` : ''}
 
 ═══════════════════════════════════════════════════════════
+CRITICAL: COMPREHENSIVE WORKOUT STRUCTURE REQUIREMENTS
+═══════════════════════════════════════════════════════════
+
+EVERY SINGLE TRAINING DAY MUST FOLLOW THIS EXACT STRUCTURE:
+
+1. **ACTIVE WARMUP** (5-10 minutes total):
+   - Category: "warmup"
+   - Include 2-3 mobility exercises appropriate for the day's focus
+   - Examples: "Hip Circles: 2 sets × 10 reps each direction", "Arm Circles: 2 sets × 10 reps", "Cat-Cow Stretch: 2 sets × 10 reps"
+   - Dynamic stretches and activation drills
+
+2. **WARMUP SETS** (Build up to working weight):
+   - Category: "warmup"
+   - Include 2-3 ramp-up sets for the main lift
+   - Example: "Barbell Squat Warmup: 3 sets × 5 reps @ 50%, 65%, 75% of working weight - 1 min rest"
+   - Light weight progression to prepare nervous system
+
+3. **MAIN LIFTS** (Heavy compound movements):
+   - Category: "main-lift"
+   - Include 2-4 primary compound exercises per day
+   - MUST include: sets, reps, rest period, RPE, percentageOfMax (relative to 1RM)
+   - Example: "Barbell Squat: 5 sets × 3 reps @ RPE 8 (85% 1RM) - 3-5 min rest"
+   - Example: "Barbell Bench Press: 4 sets × 5 reps @ RPE 7 (80% 1RM) - 3 min rest"
+   - Proper recovery time between sets
+
+4. **ACCESSORY EXERCISES** (Supporting movements):
+   - Category: "accessory"
+   - Include 4-6 accessory exercises per day
+   - Target muscles that support main lifts
+   - Example: "Leg Press: 3 sets × 8-12 reps @ RPE 7 - 90 sec rest"
+   - Example: "Hamstring Curls: 3 sets × 10-15 reps @ RPE 7 - 60 sec rest"
+   - Example: "Calf Raises: 3 sets × 15-20 reps @ RPE 6 - 45 sec rest"
+   - Include unilateral work, isolation exercises, and core work
+
+5. **COOLDOWN/STRETCHING** (5-10 minutes):
+   - Category: "cooldown"
+   - Static stretching targeting muscles worked
+   - Example: "Static Stretching: Hold each stretch 30-60 seconds - focus on quads, hamstrings, hip flexors, glutes, chest, shoulders"
+
+TOTAL EXERCISES PER WORKOUT: 12-18 exercises minimum
+- Warmup/mobility: 3-4 exercises
+- Warmup sets: 2-3 exercises
+- Main lifts: 2-4 exercises
+- Accessories: 4-6 exercises
+- Cooldown: 1-2 exercises
+
+═══════════════════════════════════════════════════════════
+NUTRITION PLAN REQUIREMENTS
+═══════════════════════════════════════════════════════════
+
+Generate a COMPLETE meal plan with nutritionPlan.mealPlan containing:
+
+{
+  "breakfast": {
+    "name": "Meal name",
+    "description": "What's in it",
+    "calories": 600,
+    "protein": 40,
+    "carbs": 60,
+    "fat": 15,
+    "ingredients": ["egg", "oats", "banana"],
+    "prepTime": 15
+  },
+  "snack1": { ... },
+  "lunch": { ... },
+  "snack2": { ... },
+  "dinner": { ... }
+}
+
+Each meal must have: name, description, calories, protein, carbs, fat, ingredients array, prepTime
+
+═══════════════════════════════════════════════════════════
+PROGRAM DURATION REQUIREMENTS
+═══════════════════════════════════════════════════════════
+
+- MINIMUM: 8 weeks for all programs
+- COMPETITION PREP: 12 weeks minimum if elite competitor within 16 weeks of meet
+- Generate ${scheduleData.daysPerWeek || 4} training days per week
+- ${scheduleData.daysPerWeek || 4} × 8 weeks MINIMUM = ${(scheduleData.daysPerWeek || 4) * 8} total training days
+- EVERY week must have complete workouts with full structure (warmup, main, accessories, cooldown)
+
+═══════════════════════════════════════════════════════════
 YOUR TASK: Generate a structured program in JSON format
 ═══════════════════════════════════════════════════════════
 
@@ -125,7 +207,7 @@ Return ONLY valid JSON (no markdown, no explanations). Use this exact structure:
 
 {
   "name": "Descriptive program name (e.g., '8-Week Powerlifting Peak', 'Competition Prep Block')",
-  "durationWeeks": 4-12,
+  "durationWeeks": 8-12,
   "periodization": {
     "model": "linear|block|undulating|conjugate|autoregulated",
     "phases": [
@@ -146,6 +228,58 @@ Return ONLY valid JSON (no markdown, no explanations). Use this exact structure:
       "protein": ${Math.round(user.profile?.currentWeight * 1.0 || 180)},
       "carbs": ${Math.round((tdee * 0.40) / 4)},
       "fat": ${Math.round((tdee * 0.30) / 9)}
+    },
+    "mealPlan": {
+      "breakfast": {
+        "name": "High Protein Breakfast",
+        "description": "Scrambled eggs with oats and fruit",
+        "calories": 600,
+        "protein": 40,
+        "carbs": 60,
+        "fat": 15,
+        "ingredients": ["4 eggs", "1 cup oats", "1 banana", "1 cup berries"],
+        "prepTime": 15
+      },
+      "snack1": {
+        "name": "Greek Yogurt Bowl",
+        "description": "Greek yogurt with granola and honey",
+        "calories": 250,
+        "protein": 25,
+        "carbs": 30,
+        "fat": 5,
+        "ingredients": ["1 cup greek yogurt", "1/3 cup granola", "1 tbsp honey"],
+        "prepTime": 5
+      },
+      "lunch": {
+        "name": "Grilled Chicken & Rice",
+        "description": "Chicken breast with brown rice and vegetables",
+        "calories": 700,
+        "protein": 50,
+        "carbs": 70,
+        "fat": 12,
+        "ingredients": ["8 oz chicken breast", "1 cup brown rice", "broccoli", "olive oil"],
+        "prepTime": 25
+      },
+      "snack2": {
+        "name": "Protein Shake",
+        "description": "Whey protein with banana and peanut butter",
+        "calories": 300,
+        "protein": 30,
+        "carbs": 35,
+        "fat": 8,
+        "ingredients": ["1 scoop whey protein", "1 banana", "1 tbsp peanut butter", "8 oz milk"],
+        "prepTime": 5
+      },
+      "dinner": {
+        "name": "Salmon & Sweet Potato",
+        "description": "Grilled salmon with sweet potato and green beans",
+        "calories": 650,
+        "protein": 45,
+        "carbs": 55,
+        "fat": 18,
+        "ingredients": ["8 oz salmon", "1 large sweet potato", "green beans", "olive oil"],
+        "prepTime": 30
+      }
     }
   },
   "weeklyTemplates": [
@@ -153,20 +287,106 @@ Return ONLY valid JSON (no markdown, no explanations). Use this exact structure:
       "weekNumber": 1,
       "trainingDays": [
         {
-          "dayOfWeek": "monday|tuesday|wednesday|thursday|friday|saturday|sunday",
-          "title": "Day title (e.g., 'Heavy Squat Day')",
-          "focus": "squat|bench|deadlift|upper|lower|accessories",
-          "duration": 60,
+          "dayOfWeek": "monday",
+          "title": "Heavy Squat Day",
+          "focus": "squat",
+          "duration": 75,
           "exercises": [
             {
-              "name": "Exercise Name",
-              "category": "main-lift|accessory|warmup|cooldown",
+              "name": "Hip Circles",
+              "category": "warmup",
+              "sets": 2,
+              "reps": "10 each direction",
+              "rest": "0 sec",
+              "notes": "Mobility prep"
+            },
+            {
+              "name": "Bodyweight Squats",
+              "category": "warmup",
+              "sets": 2,
+              "reps": "10",
+              "rest": "30 sec",
+              "notes": "Movement pattern"
+            },
+            {
+              "name": "Barbell Squat Warmup",
+              "category": "warmup",
               "sets": 3,
-              "reps": "3-5",
+              "reps": "5",
+              "rest": "1 min",
+              "notes": "Bar, 135lbs, 225lbs"
+            },
+            {
+              "name": "Barbell Squat",
+              "category": "main-lift",
+              "sets": 5,
+              "reps": "3",
               "rest": "3-5 min",
+              "rpe": 8,
+              "percentageOfMax": 85,
+              "notes": "Main lift"
+            },
+            {
+              "name": "Front Squat",
+              "category": "main-lift",
+              "sets": 3,
+              "reps": "5",
+              "rest": "3 min",
               "rpe": 7,
-              "percentageOfMax": 80,
-              "notes": "Optional notes"
+              "percentageOfMax": 75,
+              "notes": "Quad focus"
+            },
+            {
+              "name": "Leg Press",
+              "category": "accessory",
+              "sets": 3,
+              "reps": "10-12",
+              "rest": "90 sec",
+              "rpe": 7,
+              "notes": "Hypertrophy"
+            },
+            {
+              "name": "Bulgarian Split Squats",
+              "category": "accessory",
+              "sets": 3,
+              "reps": "8-10 each",
+              "rest": "90 sec",
+              "rpe": 7,
+              "notes": "Unilateral"
+            },
+            {
+              "name": "Hamstring Curls",
+              "category": "accessory",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "60 sec",
+              "rpe": 6,
+              "notes": "Knee health"
+            },
+            {
+              "name": "Calf Raises",
+              "category": "accessory",
+              "sets": 3,
+              "reps": "15-20",
+              "rest": "45 sec",
+              "rpe": 6,
+              "notes": "Full ROM"
+            },
+            {
+              "name": "Planks",
+              "category": "accessory",
+              "sets": 3,
+              "reps": "45-60 sec hold",
+              "rest": "60 sec",
+              "notes": "Core"
+            },
+            {
+              "name": "Static Stretching",
+              "category": "cooldown",
+              "sets": 1,
+              "reps": "5-10 min",
+              "rest": "0 sec",
+              "notes": "30-60 sec each: quads, hamstrings, hip flexors, glutes"
             }
           ]
         }
@@ -177,16 +397,15 @@ Return ONLY valid JSON (no markdown, no explanations). Use this exact structure:
   ]
 }
 
-CRITICAL RULES:
-1. If ${competitionData.isCompeting ? 'ELITE COMPETITOR - Calculate weeks to competition and use appropriate periodization (peak/intensity/strength/accumulation phases)' : 'USER IS NOT COMPETING - Use general periodization'}
-2. NEVER include exercises from the HATED list
-3. ALWAYS include exercises from the FAVORITE list when possible
-4. Match session duration to ${scheduleData.sessionDuration || 60} minutes
-5. Respect equipment constraints - only suggest available equipment
-6. If cutting (lose-fat goal), add cardio and adjust volume/intensity
-7. If competing, build in deload weeks every 4-5 weeks
-8. Generate ${scheduleData.daysPerWeek || 4} training days per week across ${Math.ceil((scheduleData.daysPerWeek || 4) / 7 * 14) || 2} weeks minimum
-9. Every exercise must have name, sets, reps, and rest values`;
+CRITICAL VALIDATION RULES:
+1. durationWeeks MUST be 8-12 (NEVER less than 8)
+2. EVERY trainingDay MUST have 12-18 exercises total
+3. EVERY trainingDay MUST have exercises in ALL categories: warmup, main-lift, accessory, cooldown
+4. EVERY main-lift exercise MUST have rpe and percentageOfMax specified
+5. nutritionPlan MUST include mealPlan with ALL 5 meals: breakfast, snack1, lunch, snack2, dinner
+6. Each meal MUST have: name, description, calories, protein, carbs, fat, ingredients, prepTime
+7. Generate ${scheduleData.daysPerWeek || 4} training days per week × 8 weeks minimum = ${(scheduleData.daysPerWeek || 4) * 8} total training days
+8. If ${competitionData.isCompeting ? 'COMPETITION - Use 12 weeks minimum, build in deload weeks' : 'NO COMPETITION - Use 8 weeks minimum with steady progression'}`;
 
     // ═══════════════════════════════════════════════════════════
     // CALL FORGE TO GENERATE PROGRAM
@@ -263,6 +482,7 @@ CRITICAL RULES:
     // UPDATE NUTRITION TARGETS
     // ═══════════════════════════════════════════════════════════
     const nutrition = await Nutrition.getOrCreateForUser(userId);
+    let mealEvents = [];
     if (programData.nutritionPlan) {
       nutrition.targets = {
         calories: programData.nutritionPlan.calorieTarget,
@@ -273,7 +493,21 @@ CRITICAL RULES:
       };
       await nutrition.save();
       console.log('[FORGE] Nutrition targets updated');
+
+      // ✅ GENERATE MEAL CALENDAR EVENTS
+      if (programData.nutritionPlan.mealPlan) {
+        mealEvents = await generateMealCalendarEvents(
+          userId,
+          savedProgram,
+          programData.nutritionPlan.mealPlan
+        );
+        console.log(`[FORGE] Meal events generated: ${mealEvents.length}`);
+      }
     }
+
+    // Calculate exercise count from first workout
+    const firstWorkout = savedProgram.weeklyTemplates?.[0]?.trainingDays?.[0];
+    const exercisesPerWorkout = firstWorkout?.exercises?.length || 0;
 
     // ═══════════════════════════════════════════════════════════
     // RETURN PROGRAM DETAILS
@@ -291,8 +525,11 @@ CRITICAL RULES:
         nutritionPlan: savedProgram.nutritionPlan,
         stats: {
           calendarEventsCreated: calendarEvents.length,
+          mealEventsCreated: mealEvents.length,
+          totalEventsCreated: calendarEvents.length + mealEvents.length,
           weeksPlanned: savedProgram.weeklyTemplates.length,
-          trainingDaysPerWeek: savedProgram.weeklyTemplates[0]?.trainingDays?.length || 0
+          trainingDaysPerWeek: savedProgram.weeklyTemplates[0]?.trainingDays?.length || 0,
+          exercisesPerWorkout: exercisesPerWorkout
         }
       }
     });
@@ -481,5 +718,73 @@ exports.updateProgramStatus = async (req, res) => {
     });
   }
 };
+
+// ============================================
+// HELPER: Generate Meal Calendar Events
+// ============================================
+async function generateMealCalendarEvents(userId, program, mealPlan) {
+  const CalendarEvent = require('../models/CalendarEvent');
+  const events = [];
+
+  const mealTypes = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+  const mealTimes = {
+    breakfast: '08:00',
+    snack1: '10:30',
+    lunch: '12:30',
+    snack2: '15:30',
+    dinner: '18:30'
+  };
+
+  // Generate meals for each day of the program
+  for (let week = 0; week < program.durationWeeks; week++) {
+    for (let day = 0; day < 7; day++) {
+      const eventDate = new Date(program.startDate);
+      eventDate.setDate(eventDate.getDate() + (week * 7) + day);
+
+      // Skip past dates
+      if (eventDate < new Date()) continue;
+
+      // Create CalendarEvent for each meal
+      for (const mealType of mealTypes) {
+        const mealData = mealPlan[mealType];
+
+        if (mealData) {
+          events.push({
+            userId,
+            type: 'nutrition',
+            title: mealData.name || `${mealType.charAt(0).toUpperCase() + mealType.slice(1)}`,
+            date: eventDate,
+            startTime: mealTimes[mealType],
+            mealData: {
+              mealType: mealType,
+              name: mealData.name,
+              description: mealData.description,
+              calories: mealData.calories,
+              protein: mealData.protein,
+              carbs: mealData.carbs,
+              fat: mealData.fat,
+              ingredients: mealData.ingredients,
+              prepTime: mealData.prepTime,
+              imageUrl: mealData.imageUrl || null
+            },
+            programId: program._id,
+            aiGenerated: true,
+            aiReason: `Meal plan from Program: ${program.name}`,
+            status: 'scheduled'
+          });
+        }
+      }
+    }
+  }
+
+  // Bulk insert meal events
+  if (events.length > 0) {
+    const created = await CalendarEvent.insertMany(events);
+    console.log(`[FORGE] Created ${created.length} meal calendar events`);
+    return created;
+  }
+
+  return [];
+}
 
 module.exports = exports;
