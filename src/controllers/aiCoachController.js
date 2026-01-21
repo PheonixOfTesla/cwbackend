@@ -604,47 +604,30 @@ function enrichWorkoutWithLinks(workout) {
 function detectActionIntent(question, conversationHistory) {
   const q = question.toLowerCase().trim();
 
-  // User confirmation to create program (short responses like "okay", "go", "yes", "do it")
-  const confirmationPhrases = ['okay', 'ok', 'go', 'yes', 'yep', 'yeah', 'sure', 'do it', 'let\'s go', 'lets go', 'let\'s do it', 'lets do it', 'create it', 'make it', 'sounds good', 'perfect', 'absolutely', 'for sure'];
-  const isConfirmation = confirmationPhrases.some(phrase => q === phrase || q.startsWith(phrase + ' ') || q.endsWith(' ' + phrase));
+  // Confirmation phrases - user saying "yes" to something
+  const confirmationPhrases = ['okay', 'ok', 'go', 'yes', 'yep', 'yeah', 'sure', 'do it',
+    'let\'s go', 'lets go', 'let\'s do it', 'lets do it', 'create it', 'make it',
+    'sounds good', 'perfect', 'absolutely', 'for sure', 'ready', 'start', 'begin'];
 
-  // Check if recent conversation mentioned creating a program
-  const recentContext = conversationHistory?.slice(-4).map(m => m.content.toLowerCase()).join(' ') || '';
-  const discussedProgram = recentContext.includes('create') && (recentContext.includes('program') || recentContext.includes('plan')) ||
-                          recentContext.includes('generate') && (recentContext.includes('program') || recentContext.includes('plan'));
+  // Program creation phrases
+  const programPhrases = ['create', 'generate', 'make', 'build', 'forge', 'program',
+    'plan', 'calendar', 'schedule', 'workout', 'training'];
 
-  // If user confirms and we were discussing program creation, trigger full program generation
-  if (isConfirmation && discussedProgram) {
+  const isConfirmation = confirmationPhrases.some(p => q === p || q.includes(p));
+  const wantsProgram = programPhrases.some(p => q.includes(p));
+
+  // Check recent conversation for program discussion
+  const recentContext = conversationHistory?.slice(-6).map(m => m.content?.toLowerCase() || '').join(' ') || '';
+  const discussedProgram = programPhrases.some(p => recentContext.includes(p));
+
+  // TRIGGER FULL PROGRAM if:
+  // 1. User explicitly asks for program/calendar/workout
+  // 2. User confirms (okay/yes/go) after discussing program
+  if (wantsProgram || (isConfirmation && discussedProgram)) {
     return 'GENERATE_FULL_PROGRAM';
   }
 
-  // Explicit program creation requests
-  if (q.includes('create my program') || q.includes('generate my program') ||
-      q.includes('make my program') || q.includes('build my program') ||
-      (q.includes('create') && q.includes('program')) ||
-      (q.includes('generate') && q.includes('plan'))) {
-    return 'GENERATE_FULL_PROGRAM';
-  }
-
-  // Calendar/Schedule actions (simpler, just add workouts)
-  if (q.includes('calendar') || q.includes('schedule') || q.includes('add workout') ||
-      q.includes('create workout') || q.includes('put') && (q.includes('calendar') || q.includes('schedule')) ||
-      q.includes('propagate')) {
-    return 'GENERATE_CALENDAR';
-  }
-
-  // Single workout generation
-  if ((q.includes('workout') || q.includes('routine')) &&
-      (q.includes('give me') || q.includes('create') || q.includes('make') || q.includes('generate'))) {
-    return 'GENERATE_WORKOUT';
-  }
-
-  // Modify existing workout
-  if (q.includes('modify') || q.includes('adjust') || q.includes('change') || q.includes('swap')) {
-    return 'MODIFY_WORKOUT';
-  }
-
-  return null; // Regular Q&A
+  return null; // Regular Q&A chat
 }
 
 // ============================================
@@ -974,304 +957,6 @@ Return ONLY valid JSON with this structure:
       } catch (programErr) {
         console.error('[FORGE] Full program generation error:', programErr);
         actionPromptAddition = `\n\n[SYSTEM: Program generation encountered an error: ${programErr.message}. Apologize and suggest trying again.]`;
-      }
-    }
-
-    // Execute actions if detected
-    else if (actionIntent === 'GENERATE_CALENDAR') {
-      try {
-        console.log('[FORGE] Executing action: GENERATE_CALENDAR');
-
-        // Generate a training week
-        const weekStart = new Date();
-        weekStart.setHours(0, 0, 0, 0);
-
-        // CRITICAL FIX: Parse days from the user's message
-        const questionLower = question.toLowerCase();
-        const dayNamesMap = {
-          'monday': 'monday', 'mon': 'monday',
-          'tuesday': 'tuesday', 'tue': 'tuesday', 'tues': 'tuesday',
-          'wednesday': 'wednesday', 'wed': 'wednesday',
-          'thursday': 'thursday', 'thu': 'thursday', 'thur': 'thursday', 'thurs': 'thursday',
-          'friday': 'friday', 'fri': 'friday',
-          'saturday': 'saturday', 'sat': 'saturday',
-          'sunday': 'sunday', 'sun': 'sunday'
-        };
-
-        // Extract days mentioned in the conversation
-        const mentionedDays = [];
-        Object.keys(dayNamesMap).forEach(key => {
-          if (questionLower.includes(key)) {
-            const dayName = dayNamesMap[key];
-            if (!mentionedDays.includes(dayName)) {
-              mentionedDays.push(dayName);
-            }
-          }
-        });
-
-        // Build simple program based on user profile
-        const daysPerWeek = mentionedDays.length || user.schedule?.daysPerWeek || 4;
-        // PRIORITY: Use days from conversation, fallback to profile
-        const preferredDays = mentionedDays.length > 0 ? mentionedDays : (user.schedule?.preferredDays || ['monday', 'tuesday', 'thursday', 'friday']);
-        const goal = user.primaryGoal?.type || 'general-health';
-
-        // Extract current lifts mentioned in conversation (e.g., "475 squat", "285 bench")
-        const currentLifts = {};
-        const liftRegex = /(\d{3,4})\s*(?:lbs?|pounds?)?\s*(?:on\s+)?(?:for\s+)?(?:a\s+)?(?:max\s+)?(\w+)/gi;
-        let match;
-        while ((match = liftRegex.exec(question)) !== null) {
-          const weight = match[1];
-          const liftName = match[2].toLowerCase();
-          if (['squat', 'bench', 'deadlift', 'press'].some(l => liftName.includes(l))) {
-            if (liftName.includes('squat')) currentLifts.squat = parseInt(weight);
-            else if (liftName.includes('bench')) currentLifts.bench = parseInt(weight);
-            else if (liftName.includes('deadlift')) currentLifts.deadlift = parseInt(weight);
-            else if (liftName.includes('press')) currentLifts.press = parseInt(weight);
-          }
-        }
-
-        console.log(`[FORGE] Using days: ${preferredDays.join(', ')} (${mentionedDays.length > 0 ? 'from conversation' : 'from profile'})`);
-        if (Object.keys(currentLifts).length > 0) {
-          console.log(`[FORGE] Extracted lifts from conversation:`, currentLifts);
-
-          // ✅ SAVE EXTRACTED LIFTS TO USER MODEL FOR FUTURE REFERENCE
-          try {
-            const exerciseMap = {
-              'squat': 'Barbell Squat',
-              'bench': 'Barbell Bench Press',
-              'deadlift': 'Barbell Deadlift',
-              'press': 'Overhead Press'
-            };
-
-            // Initialize personalRecords if needed
-            if (!user.personalRecords) {
-              user.personalRecords = [];
-            }
-
-            // Add or update each extracted lift
-            for (const [lift, weight] of Object.entries(currentLifts)) {
-              const exerciseName = exerciseMap[lift] || lift;
-
-              // Check if we already have this exercise recorded
-              const existingIndex = user.personalRecords.findIndex(
-                r => r.exerciseName?.toLowerCase().includes(lift)
-              );
-
-              // Calculate estimated 1RM using Brzycki formula: 1RM = weight / (1.0278 - (0.0278 * reps))
-              const estimatedOneRepMax = Math.round(weight / (1.0278 - (0.0278 * 1)));
-
-              const recordData = {
-                exerciseName: exerciseName,
-                weight: weight,
-                reps: 1,
-                oneRepMax: estimatedOneRepMax,
-                date: new Date(),
-                notes: 'Extracted from chat conversation'
-              };
-
-              if (existingIndex >= 0) {
-                // Update existing record
-                user.personalRecords[existingIndex] = recordData;
-              } else {
-                // Add new record
-                user.personalRecords.push(recordData);
-              }
-            }
-
-            // Save updated user with new PR records
-            await user.save();
-            console.log(`[FORGE] ✅ Saved ${Object.keys(currentLifts).length} lifts to user personalRecords`);
-          } catch (prError) {
-            console.warn(`[FORGE] Warning: Could not save personalRecords:`, prError.message);
-          }
-        }
-
-        const workoutTemplates = {
-          'build-strength': ['Heavy Squat Day', 'Heavy Bench Day', 'Heavy Deadlift Day', 'Accessories'],
-          'build-muscle': ['Push Day', 'Pull Day', 'Legs Day', 'Upper Hypertrophy'],
-          'lose-fat': ['Full Body HIIT', 'Upper Body Circuit', 'Lower Body Burn', 'Cardio & Core'],
-          'general-health': ['Full Body A', 'Cardio', 'Full Body B', 'Active Recovery'],
-          'competition-prep': ['Squat Focus', 'Bench Focus', 'Deadlift Focus', 'Technique Work']
-        };
-
-        const templates = workoutTemplates[goal] || workoutTemplates['general-health'];
-        const events = [];
-        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-        // Calculate periodization phase based on competition date
-        let periodizationPhase = 'accumulation';
-        let weeksToCompetition = 12;
-        const isEliteCompetitor = (user.experience?.level === 'advanced' || user.experience?.level === 'elite') &&
-                                  (user.competitionPrep?.isCompeting || goal === 'competition-prep');
-
-        if (isEliteCompetitor && user.competitionPrep?.meetDate) {
-          const compDate = new Date(user.competitionPrep.meetDate);
-          const now = new Date(weekStart);
-          weeksToCompetition = Math.ceil((compDate - now) / (7 * 24 * 60 * 60 * 1000));
-
-          if (weeksToCompetition <= 2) periodizationPhase = 'peak';
-          else if (weeksToCompetition <= 4) periodizationPhase = 'intensity';
-          else if (weeksToCompetition <= 8) periodizationPhase = 'strength';
-          else periodizationPhase = 'accumulation';
-
-          console.log(`[FORGE] Elite competitor: ${weeksToCompetition} weeks to meet, phase: ${periodizationPhase}`);
-        }
-
-        // Generate detailed workout for each day - LOOP THROUGH 4 WEEKS (not just 1)
-        for (let week = 0; week < 4; week++) {
-          for (let i = 0; i < Math.min(daysPerWeek, preferredDays.length); i++) {
-            const dayName = preferredDays[i]?.toLowerCase();
-            const dayIndex = daysOfWeek.indexOf(dayName);
-            if (dayIndex === -1) continue;
-
-            const eventDate = new Date(weekStart);
-            const currentDayIndex = weekStart.getDay();
-            const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
-            eventDate.setDate(eventDate.getDate() + (week * 7) + daysToAdd);
-
-            // Skip if date is in the past
-            if (eventDate < new Date()) continue;
-
-          // Generate detailed exercises for this workout
-          const exerciseCount = user.experience?.level === 'beginner' ? 5 : user.experience?.level === 'advanced' || user.experience?.level === 'elite' ? 8 : 6;
-
-          // For elite competitors, choose exercises based on periodization phase and workout type
-          let baseExercises = {
-            'build-strength': ['Barbell Squat', 'Barbell Bench Press', 'Barbell Deadlift', 'Barbell Rows', 'Overhead Press', 'Pull-ups', 'Front Squat'],
-            'build-muscle': ['Barbell Bench Press', 'Incline Dumbbell Press', 'Barbell Rows', 'Pull-ups', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Chest Flies'],
-            'lose-fat': ['Burpees', 'Jump Squats', 'Mountain Climbers', 'Jump Rope', 'Battle Ropes', 'Box Jumps', 'Kettlebell Swings', 'Rowing Machine'],
-            'general-health': ['Barbell Squat', 'Dumbbell Bench Press', 'Barbell Rows', 'Leg Press', 'Cable Machine Rows', 'Push-ups'],
-            'competition-prep': ['Barbell Squat', 'Barbell Bench Press', 'Barbell Deadlift', 'Accessory Squat', 'Accessory Bench', 'Accessory Deadlift']
-          };
-
-          // For elite/advanced competitors in peak or intensity phases - use max effort variants
-          if (isEliteCompetitor && (periodizationPhase === 'peak' || periodizationPhase === 'intensity')) {
-            const workoutIndex = (week * daysPerWeek + i) % preferredDays.length;
-            if (workoutIndex % 3 === 0) { // Max Effort Lower roughly every 3 days
-              baseExercises['competition-prep'] = ['Competition Squat', 'Pause Squat', 'Box Squat', 'Front Squat', 'Pin Squats', 'Leg Press', 'Belt Squat', 'Pin Rows'];
-            } else if (workoutIndex % 3 === 1) { // Max Effort Upper
-              baseExercises['competition-prep'] = ['Competition Bench Press', 'Close Grip Bench', 'Incline Bench', 'Spoto Press', 'Board Press', 'Pin Press', 'Dumbbell Press', 'Dips'];
-            } else { // Dynamic Effort or Accessory
-              baseExercises['competition-prep'] = ['Deadlift Variations', 'Deficit Deadlifts', 'Rack Pulls', 'Sumo Deadlift', 'RDL', 'Leg Curls', 'Back Extensions', 'Barbell Rows'];
-            }
-          }
-
-          const selectedExercises = baseExercises[goal] || baseExercises['general-health'];
-          const workoutExercises = [];
-
-          // Warmup (2-3 exercises)
-          workoutExercises.push({
-            name: 'Dynamic Stretching',
-            sets: 1,
-            reps: '2 min',
-            rest: '0 sec',
-            notes: 'Arm circles, leg swings, cat-cow stretch'
-          });
-          workoutExercises.push({
-            name: 'Mobility Drills',
-            sets: 1,
-            reps: '2 min',
-            rest: '0 sec',
-            notes: 'Focus on mobility for today\'s focus area'
-          });
-
-          // Main workout exercises (5-9 based on goal)
-          for (let j = 0; j < Math.min(exerciseCount, selectedExercises.length); j++) {
-            const sets = goal === 'build-strength' ? 3 : goal === 'lose-fat' ? 2 : 3;
-            const reps = goal === 'build-strength' ? '3-5' : goal === 'lose-fat' ? '12-15' : '6-10';
-
-            // ✅ CALCULATE RPE AND PERCENTAGE FOR ELITE COMPETITORS
-            let rpe = 6;  // Default RPE
-            let percentageOfMax = null;
-
-            if (isEliteCompetitor) {
-              // RPE and % based on periodization phase
-              if (periodizationPhase === 'peak') {
-                rpe = 9;  // Very high intensity
-                percentageOfMax = 95;
-              } else if (periodizationPhase === 'intensity') {
-                rpe = 8;  // High intensity
-                percentageOfMax = 90;
-              } else if (periodizationPhase === 'strength') {
-                rpe = 7;  // Moderate-high intensity
-                percentageOfMax = 80;
-              } else {
-                // Accumulation phase
-                rpe = 6;  // Moderate intensity
-                percentageOfMax = 70;
-              }
-            }
-
-            workoutExercises.push({
-              name: selectedExercises[j],
-              sets: sets,
-              reps: reps,
-              rest: goal === 'build-strength' ? '3-5 min' : goal === 'lose-fat' ? '30-45 sec' : '60-90 sec',
-              rpe: isEliteCompetitor ? rpe : null,
-              percentageOfMax: percentageOfMax,
-              notes: goal === 'build-strength' ? 'Heavy weight, focus on form' : goal === 'lose-fat' ? 'Minimal rest, keep heart rate up' : 'Controlled reps, steady pace'
-            });
-          }
-
-          // Post-workout stretches (2-3)
-          workoutExercises.push({
-            name: 'Static Stretching',
-            sets: 1,
-            reps: '5-7 min',
-            rest: '0 sec',
-            notes: 'Hold each stretch 30-60 seconds'
-          });
-
-          // Build meaningful title for elite competitors
-          let workoutTitle = templates[i % templates.length];
-          let workoutDescription = `${goal.replace('-', ' ')} - ${exerciseCount} main exercises + warmup & stretch`;
-
-          if (isEliteCompetitor) {
-            const periodPhaseLabel = {
-              'peak': 'Competition Peak',
-              'intensity': 'Intensity Block',
-              'strength': 'Strength Block',
-              'accumulation': 'Accumulation Phase'
-            };
-            workoutTitle = periodPhaseLabel[periodizationPhase] || 'Elite Programming';
-            workoutDescription = `${periodPhaseLabel[periodizationPhase]} - Week ${week + 1} of prep - ${exerciseCount} exercises`;
-          }
-
-          events.push({
-            userId,
-            type: 'workout',
-            title: workoutTitle,
-            description: workoutDescription,
-            date: eventDate,
-            startTime: user.schedule?.preferredTime || '09:00',
-            duration: user.schedule?.sessionDuration || 60,
-            exercises: workoutExercises,
-            aiGenerated: true,
-            aiReason: 'Generated by FORGE via chat',
-            status: 'scheduled',
-
-            // ✅ ELITE PROGRAMMING METADATA
-            periodizationPhase: isEliteCompetitor ? periodizationPhase : null,
-            weeksToCompetition: isEliteCompetitor ? weeksToCompetition : null,
-            isEliteCompetitor: isEliteCompetitor,
-            currentLifts: Object.keys(currentLifts).length > 0 ? currentLifts : null,
-            competitionDate: user.competitionPrep?.meetDate || null
-          });
-          }
-        }
-
-        if (events.length > 0) {
-          const created = await CalendarEvent.insertMany(events);
-          actionResult = {
-            action: 'CALENDAR_GENERATED',
-            eventsCreated: created.length,
-            events: created.map(e => ({ title: e.title, date: e.date }))
-          };
-          actionPromptAddition = `\n\n[SYSTEM: You just created ${created.length} workouts in the user's calendar for the next 4 weeks. Let them know what you did!]`;
-        }
-      } catch (actionErr) {
-        console.error('[FORGE] Action error:', actionErr);
-        actionPromptAddition = `\n\n[SYSTEM: You tried to add workouts to the calendar but encountered an error. Apologize and suggest they try the Generate button on the Calendar page instead.]`;
       }
     }
 
