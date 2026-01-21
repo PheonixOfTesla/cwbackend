@@ -462,7 +462,7 @@ async function generateInitialProgram(user) {
     const prompt = buildInitialProgramPrompt(user);
     console.log('🤖 Generating initial training program with AI (multi-provider fallback)...');
 
-    const aiResponse = await aiService.generateAIContent(prompt, null, 4096);
+    const aiResponse = await aiService.generateAIContent(prompt, null, 8192);
     const aiText = aiResponse.text;
     console.log(`✓ Program generated from ${aiResponse.source}`);
 

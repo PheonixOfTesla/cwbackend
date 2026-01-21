@@ -250,7 +250,7 @@ const aiCoachSchema = new mongoose.Schema({
     },
     phase: {
       type: String,
-      enum: ['accumulation', 'intensification', 'realization', 'deload', 'transition']
+      enum: ['accumulation', 'strength', 'intensity', 'peak', 'deload', 'transition']
     },
     nextDeloadWeek: Number,
     programGoal: String

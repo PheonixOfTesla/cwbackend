@@ -17,7 +17,7 @@ const calendarEventSchema = new mongoose.Schema({
 
   // Nutrition meal data (for type='nutrition')
   mealData: {
-    mealType: { type: String, enum: ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'] },
+    mealType: { type: String, enum: ['breakfast', 'snack', 'snack1', 'lunch', 'snack2', 'dinner'] },
     name: String,
     calories: Number,
     protein: Number,
@@ -56,7 +56,7 @@ const calendarEventSchema = new mongoose.Schema({
   // Elite programming metadata (for periodization and competition prep)
   periodizationPhase: {
     type: String,
-    enum: ['accumulation', 'strength', 'intensity', 'peak'],
+    enum: ['accumulation', 'strength', 'intensity', 'peak', 'deload', 'transition'],
     default: null
   },
   weeksToCompetition: Number,

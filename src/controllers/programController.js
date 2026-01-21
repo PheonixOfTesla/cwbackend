@@ -412,7 +412,7 @@ CRITICAL VALIDATION RULES:
     // ═══════════════════════════════════════════════════════════
     console.log('[FORGE] Generating program for user:', userId);
 
-    const aiResponse = await aiService.generateAIContent(prompt, 'You are FORGE, the AI training coach');
+    const aiResponse = await aiService.generateAIContent(prompt, 'You are FORGE, the AI training coach', 16384);
 
     // Parse JSON response
     let programData;

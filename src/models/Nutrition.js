@@ -133,7 +133,7 @@ const nutritionSchema = new mongoose.Schema({
   dailyLogs: [{
     date: { type: Date, default: Date.now },
     meals: [{
-      mealType: { type: String, enum: ['breakfast', 'snack', 'lunch', 'dinner'] },
+      mealType: { type: String, enum: ['breakfast', 'snack', 'snack1', 'lunch', 'snack2', 'dinner'] },
       name: String,
       calories: Number,
       protein: Number,

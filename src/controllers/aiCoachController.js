@@ -332,7 +332,7 @@ Return as JSON with this structure:
 }`;
 
     // Use AI with automatic fallback for program generation
-    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY);
+    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY, 8192);
     let programText = aiResponse.text;
     console.log(`[AI Coach] Program generated from ${aiResponse.source}`);
 
@@ -508,7 +508,7 @@ Return JSON:
 }`;
 
     // Use AI with automatic fallback
-    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY);
+    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY, 4096);
     let workoutText = aiResponse.text;
     console.log(`[AI Coach] Workout generated from ${aiResponse.source}`);
 
@@ -853,7 +853,7 @@ Return ONLY valid JSON with this structure:
   ]
 }`;
 
-        const aiResponse = await aiService.generateAIContent(forgePrompt, 'You are FORGE, the elite AI coach');
+        const aiResponse = await aiService.generateAIContent(forgePrompt, 'You are FORGE, the elite AI coach', 16384);
 
         // Parse response
         let programData;

@@ -285,7 +285,7 @@ For imageCategory, use one of: eggs, chicken, steak, fish, salad, rice, pasta, s
 
     console.log('🍳 FORGE Kitchen generating meal plan with AI (multi-provider fallback)...');
 
-    const aiResponse = await aiService.generateAIContent(prompt, null, 2048);
+    const aiResponse = await aiService.generateAIContent(prompt, null, 4096);
     const aiText = aiResponse.text;
     console.log(`✓ Meal plan generated from ${aiResponse.source}`);
 
