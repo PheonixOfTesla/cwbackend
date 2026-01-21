@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const programController = require('../controllers/programController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 
 // All routes require authentication
-router.use(auth);
+router.use(protect);
 
 // ============================================
 // PROGRAM MANAGEMENT ROUTES
