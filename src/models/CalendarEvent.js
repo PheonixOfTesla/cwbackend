@@ -38,8 +38,26 @@ const calendarEventSchema = new mongoose.Schema({
     reps: String,
     rest: String,
     weight: Number,
+    percentageOfMax: Number,  // Percentage of 1RM
+    rpe: Number,              // Rate of Perceived Exertion (1-10)
     notes: String
   }],
+
+  // Elite programming metadata (for periodization and competition prep)
+  periodizationPhase: {
+    type: String,
+    enum: ['accumulation', 'strength', 'intensity', 'peak'],
+    default: null
+  },
+  weeksToCompetition: Number,
+  isEliteCompetitor: Boolean,
+  currentLifts: {
+    squat: Number,
+    bench: Number,
+    deadlift: Number,
+    press: Number
+  },
+  competitionDate: Date,
 
   // Event Details
   title: { type: String, required: true, trim: true },

@@ -714,7 +714,76 @@ exports.askCoach = async (req, res) => {
         const preferredDays = mentionedDays.length > 0 ? mentionedDays : (user.schedule?.preferredDays || ['monday', 'tuesday', 'thursday', 'friday']);
         const goal = user.primaryGoal?.type || 'general-health';
 
+        // Extract current lifts mentioned in conversation (e.g., "475 squat", "285 bench")
+        const currentLifts = {};
+        const liftRegex = /(\d{3,4})\s*(?:lbs?|pounds?)?\s*(?:on\s+)?(?:for\s+)?(?:a\s+)?(?:max\s+)?(\w+)/gi;
+        let match;
+        while ((match = liftRegex.exec(question)) !== null) {
+          const weight = match[1];
+          const liftName = match[2].toLowerCase();
+          if (['squat', 'bench', 'deadlift', 'press'].some(l => liftName.includes(l))) {
+            if (liftName.includes('squat')) currentLifts.squat = parseInt(weight);
+            else if (liftName.includes('bench')) currentLifts.bench = parseInt(weight);
+            else if (liftName.includes('deadlift')) currentLifts.deadlift = parseInt(weight);
+            else if (liftName.includes('press')) currentLifts.press = parseInt(weight);
+          }
+        }
+
         console.log(`[FORGE] Using days: ${preferredDays.join(', ')} (${mentionedDays.length > 0 ? 'from conversation' : 'from profile'})`);
+        if (Object.keys(currentLifts).length > 0) {
+          console.log(`[FORGE] Extracted lifts from conversation:`, currentLifts);
+
+          // ✅ SAVE EXTRACTED LIFTS TO USER MODEL FOR FUTURE REFERENCE
+          try {
+            const exerciseMap = {
+              'squat': 'Barbell Squat',
+              'bench': 'Barbell Bench Press',
+              'deadlift': 'Barbell Deadlift',
+              'press': 'Overhead Press'
+            };
+
+            // Initialize personalRecords if needed
+            if (!user.personalRecords) {
+              user.personalRecords = [];
+            }
+
+            // Add or update each extracted lift
+            for (const [lift, weight] of Object.entries(currentLifts)) {
+              const exerciseName = exerciseMap[lift] || lift;
+
+              // Check if we already have this exercise recorded
+              const existingIndex = user.personalRecords.findIndex(
+                r => r.exerciseName?.toLowerCase().includes(lift)
+              );
+
+              // Calculate estimated 1RM using Brzycki formula: 1RM = weight / (1.0278 - (0.0278 * reps))
+              const estimatedOneRepMax = Math.round(weight / (1.0278 - (0.0278 * 1)));
+
+              const recordData = {
+                exerciseName: exerciseName,
+                weight: weight,
+                reps: 1,
+                oneRepMax: estimatedOneRepMax,
+                date: new Date(),
+                notes: 'Extracted from chat conversation'
+              };
+
+              if (existingIndex >= 0) {
+                // Update existing record
+                user.personalRecords[existingIndex] = recordData;
+              } else {
+                // Add new record
+                user.personalRecords.push(recordData);
+              }
+            }
+
+            // Save updated user with new PR records
+            await user.save();
+            console.log(`[FORGE] ✅ Saved ${Object.keys(currentLifts).length} lifts to user personalRecords`);
+          } catch (prError) {
+            console.warn(`[FORGE] Warning: Could not save personalRecords:`, prError.message);
+          }
+        }
 
         const workoutTemplates = {
           'build-strength': ['Heavy Squat Day', 'Heavy Bench Day', 'Heavy Deadlift Day', 'Accessories'],
@@ -728,26 +797,63 @@ exports.askCoach = async (req, res) => {
         const events = [];
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-        // Generate detailed workout for each day
-        for (let i = 0; i < Math.min(daysPerWeek, preferredDays.length); i++) {
-          const dayName = preferredDays[i]?.toLowerCase();
-          const dayIndex = daysOfWeek.indexOf(dayName);
-          if (dayIndex === -1) continue;
+        // Calculate periodization phase based on competition date
+        let periodizationPhase = 'accumulation';
+        let weeksToCompetition = 12;
+        const isEliteCompetitor = (user.experience?.level === 'advanced' || user.experience?.level === 'elite') &&
+                                  (user.competitionPrep?.isCompeting || goal === 'competition-prep');
 
-          const eventDate = new Date(weekStart);
-          const currentDayIndex = weekStart.getDay();
-          const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
-          eventDate.setDate(eventDate.getDate() + daysToAdd);
+        if (isEliteCompetitor && user.competitionPrep?.meetDate) {
+          const compDate = new Date(user.competitionPrep.meetDate);
+          const now = new Date(weekStart);
+          weeksToCompetition = Math.ceil((compDate - now) / (7 * 24 * 60 * 60 * 1000));
+
+          if (weeksToCompetition <= 2) periodizationPhase = 'peak';
+          else if (weeksToCompetition <= 4) periodizationPhase = 'intensity';
+          else if (weeksToCompetition <= 8) periodizationPhase = 'strength';
+          else periodizationPhase = 'accumulation';
+
+          console.log(`[FORGE] Elite competitor: ${weeksToCompetition} weeks to meet, phase: ${periodizationPhase}`);
+        }
+
+        // Generate detailed workout for each day - LOOP THROUGH 4 WEEKS (not just 1)
+        for (let week = 0; week < 4; week++) {
+          for (let i = 0; i < Math.min(daysPerWeek, preferredDays.length); i++) {
+            const dayName = preferredDays[i]?.toLowerCase();
+            const dayIndex = daysOfWeek.indexOf(dayName);
+            if (dayIndex === -1) continue;
+
+            const eventDate = new Date(weekStart);
+            const currentDayIndex = weekStart.getDay();
+            const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
+            eventDate.setDate(eventDate.getDate() + (week * 7) + daysToAdd);
+
+            // Skip if date is in the past
+            if (eventDate < new Date()) continue;
 
           // Generate detailed exercises for this workout
-          const exerciseCount = user.experience?.level === 'beginner' ? 5 : user.experience?.level === 'advanced' ? 8 : 6;
-          const baseExercises = {
+          const exerciseCount = user.experience?.level === 'beginner' ? 5 : user.experience?.level === 'advanced' || user.experience?.level === 'elite' ? 8 : 6;
+
+          // For elite competitors, choose exercises based on periodization phase and workout type
+          let baseExercises = {
             'build-strength': ['Barbell Squat', 'Barbell Bench Press', 'Barbell Deadlift', 'Barbell Rows', 'Overhead Press', 'Pull-ups', 'Front Squat'],
             'build-muscle': ['Barbell Bench Press', 'Incline Dumbbell Press', 'Barbell Rows', 'Pull-ups', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Chest Flies'],
             'lose-fat': ['Burpees', 'Jump Squats', 'Mountain Climbers', 'Jump Rope', 'Battle Ropes', 'Box Jumps', 'Kettlebell Swings', 'Rowing Machine'],
             'general-health': ['Barbell Squat', 'Dumbbell Bench Press', 'Barbell Rows', 'Leg Press', 'Cable Machine Rows', 'Push-ups'],
             'competition-prep': ['Barbell Squat', 'Barbell Bench Press', 'Barbell Deadlift', 'Accessory Squat', 'Accessory Bench', 'Accessory Deadlift']
           };
+
+          // For elite/advanced competitors in peak or intensity phases - use max effort variants
+          if (isEliteCompetitor && (periodizationPhase === 'peak' || periodizationPhase === 'intensity')) {
+            const workoutIndex = (week * daysPerWeek + i) % preferredDays.length;
+            if (workoutIndex % 3 === 0) { // Max Effort Lower roughly every 3 days
+              baseExercises['competition-prep'] = ['Competition Squat', 'Pause Squat', 'Box Squat', 'Front Squat', 'Pin Squats', 'Leg Press', 'Belt Squat', 'Pin Rows'];
+            } else if (workoutIndex % 3 === 1) { // Max Effort Upper
+              baseExercises['competition-prep'] = ['Competition Bench Press', 'Close Grip Bench', 'Incline Bench', 'Spoto Press', 'Board Press', 'Pin Press', 'Dumbbell Press', 'Dips'];
+            } else { // Dynamic Effort or Accessory
+              baseExercises['competition-prep'] = ['Deadlift Variations', 'Deficit Deadlifts', 'Rack Pulls', 'Sumo Deadlift', 'RDL', 'Leg Curls', 'Back Extensions', 'Barbell Rows'];
+            }
+          }
 
           const selectedExercises = baseExercises[goal] || baseExercises['general-health'];
           const workoutExercises = [];
@@ -772,11 +878,36 @@ exports.askCoach = async (req, res) => {
           for (let j = 0; j < Math.min(exerciseCount, selectedExercises.length); j++) {
             const sets = goal === 'build-strength' ? 3 : goal === 'lose-fat' ? 2 : 3;
             const reps = goal === 'build-strength' ? '3-5' : goal === 'lose-fat' ? '12-15' : '6-10';
+
+            // ✅ CALCULATE RPE AND PERCENTAGE FOR ELITE COMPETITORS
+            let rpe = 6;  // Default RPE
+            let percentageOfMax = null;
+
+            if (isEliteCompetitor) {
+              // RPE and % based on periodization phase
+              if (periodizationPhase === 'peak') {
+                rpe = 9;  // Very high intensity
+                percentageOfMax = 95;
+              } else if (periodizationPhase === 'intensity') {
+                rpe = 8;  // High intensity
+                percentageOfMax = 90;
+              } else if (periodizationPhase === 'strength') {
+                rpe = 7;  // Moderate-high intensity
+                percentageOfMax = 80;
+              } else {
+                // Accumulation phase
+                rpe = 6;  // Moderate intensity
+                percentageOfMax = 70;
+              }
+            }
+
             workoutExercises.push({
               name: selectedExercises[j],
               sets: sets,
               reps: reps,
               rest: goal === 'build-strength' ? '3-5 min' : goal === 'lose-fat' ? '30-45 sec' : '60-90 sec',
+              rpe: isEliteCompetitor ? rpe : null,
+              percentageOfMax: percentageOfMax,
               notes: goal === 'build-strength' ? 'Heavy weight, focus on form' : goal === 'lose-fat' ? 'Minimal rest, keep heart rate up' : 'Controlled reps, steady pace'
             });
           }
@@ -790,19 +921,42 @@ exports.askCoach = async (req, res) => {
             notes: 'Hold each stretch 30-60 seconds'
           });
 
+          // Build meaningful title for elite competitors
+          let workoutTitle = templates[i % templates.length];
+          let workoutDescription = `${goal.replace('-', ' ')} - ${exerciseCount} main exercises + warmup & stretch`;
+
+          if (isEliteCompetitor) {
+            const periodPhaseLabel = {
+              'peak': 'Competition Peak',
+              'intensity': 'Intensity Block',
+              'strength': 'Strength Block',
+              'accumulation': 'Accumulation Phase'
+            };
+            workoutTitle = periodPhaseLabel[periodizationPhase] || 'Elite Programming';
+            workoutDescription = `${periodPhaseLabel[periodizationPhase]} - Week ${week + 1} of prep - ${exerciseCount} exercises`;
+          }
+
           events.push({
             userId,
             type: 'workout',
-            title: templates[i % templates.length],
-            description: `${goal.replace('-', ' ')} - ${exerciseCount} main exercises + warmup & stretch`,
+            title: workoutTitle,
+            description: workoutDescription,
             date: eventDate,
             startTime: user.schedule?.preferredTime || '09:00',
             duration: user.schedule?.sessionDuration || 60,
             exercises: workoutExercises,
             aiGenerated: true,
             aiReason: 'Generated by FORGE via chat',
-            status: 'scheduled'
+            status: 'scheduled',
+
+            // ✅ ELITE PROGRAMMING METADATA
+            periodizationPhase: isEliteCompetitor ? periodizationPhase : null,
+            weeksToCompetition: isEliteCompetitor ? weeksToCompetition : null,
+            isEliteCompetitor: isEliteCompetitor,
+            currentLifts: Object.keys(currentLifts).length > 0 ? currentLifts : null,
+            competitionDate: user.competitionPrep?.meetDate || null
           });
+          }
         }
 
         if (events.length > 0) {
@@ -812,7 +966,7 @@ exports.askCoach = async (req, res) => {
             eventsCreated: created.length,
             events: created.map(e => ({ title: e.title, date: e.date }))
           };
-          actionPromptAddition = `\n\n[SYSTEM: You just created ${created.length} workouts in the user's calendar for this week. Let them know what you did!]`;
+          actionPromptAddition = `\n\n[SYSTEM: You just created ${created.length} workouts in the user's calendar for the next 4 weeks. Let them know what you did!]`;
         }
       } catch (actionErr) {
         console.error('[FORGE] Action error:', actionErr);
