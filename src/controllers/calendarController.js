@@ -1,16 +1,9 @@
-const OpenAI = require('openai');
 const CalendarEvent = require('../models/CalendarEvent');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const User = require('../models/User');
 const Workout = require('../models/Workout');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE
+const aiService = require('../services/aiService');
 
 // Helper function to normalize event type to valid enum values
 // Placed at top so it can be used by both generateWeek and generateMonth
@@ -336,13 +329,10 @@ exports.generateWeek = async (req, res) => {
       });
     }
 
-    console.log('🔨 FORGE generating weekly training plan with Kimi K2 (FREE)...');
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    const aiText = completion.choices[0].message.content;
+    console.log('🔨 FORGE generating weekly training plan with AI (multi-provider fallback)...');
+    const aiResponse = await aiService.generateAIContent(prompt, null, 4096);
+    const aiText = aiResponse.text;
+    console.log(`✓ Plan generated from ${aiResponse.source}`);
 
     // Parse JSON from AI response
     let plan;
@@ -565,13 +555,10 @@ exports.generateMonth = async (req, res) => {
       });
     }
 
-    console.log('🔥 FORGE generating monthly training program with Kimi K2 (FREE)...');
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL,
-      max_tokens: 8192,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    const aiText = completion.choices[0].message.content;
+    console.log('🔥 FORGE generating monthly training program with AI (multi-provider fallback)...');
+    const aiResponse = await aiService.generateAIContent(prompt, null, 8192);
+    const aiText = aiResponse.text;
+    console.log(`✓ Plan generated from ${aiResponse.source}`);
 
     // Parse JSON from AI response
     let plan;

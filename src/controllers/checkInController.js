@@ -1,16 +1,9 @@
-const OpenAI = require('openai');
 const CheckIn = require('../models/CheckIn');
 const WearableData = require('../models/WearableData');
 const Goal = require('../models/Goal');
 const Workout = require('../models/Workout');
 const CalendarEvent = require('../models/CalendarEvent');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE
+const aiService = require('../services/aiService');
 
 /**
  * Get today's check-in (or pre-filled template)
@@ -347,12 +340,8 @@ Return ONLY valid JSON:
   "nutritionTip": "One specific nutrition tip for today"
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL,
-      max_tokens: 512,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    const aiText = completion.choices[0].message.content;
+    const aiResponse = await aiService.generateAIContent(prompt, null, 512);
+    const aiText = aiResponse.text;
 
     // Parse JSON
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);

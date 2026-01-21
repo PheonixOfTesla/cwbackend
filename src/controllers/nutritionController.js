@@ -6,14 +6,7 @@
 const Nutrition = require('../models/Nutrition');
 const User = require('../models/User');
 const CalendarEvent = require('../models/CalendarEvent');
-const OpenAI = require('openai');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE
+const aiService = require('../services/aiService');
 
 // ============================================
 // TDEE & MACRO CALCULATION (Mifflin-St Jeor)
@@ -290,15 +283,11 @@ Return ONLY valid JSON:
 
 For imageCategory, use one of: eggs, chicken, steak, fish, salad, rice, pasta, sandwich, smoothie, oatmeal, yogurt, nuts, fruit, vegetables, soup`;
 
-    console.log('🍳 FORGE Kitchen generating meal plan with Kimi K2 (FREE)...');
+    console.log('🍳 FORGE Kitchen generating meal plan with AI (multi-provider fallback)...');
 
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }]
-    });
-
-    const aiText = completion.choices[0].message.content;
+    const aiResponse = await aiService.generateAIContent(prompt, null, 2048);
+    const aiText = aiResponse.text;
+    console.log(`✓ Meal plan generated from ${aiResponse.source}`);
 
     // Parse response
     let mealPlan;

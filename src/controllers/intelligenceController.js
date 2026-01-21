@@ -1,18 +1,11 @@
 // Src/controllers/intelligenceController.js
-const OpenAI = require('openai');
 const WearableData = require('../models/WearableData');
 const Workout = require('../models/Workout');
 const Measurement = require('../models/Measurement');
 const Nutrition = require('../models/Nutrition');
 const Goal = require('../models/Goal');
 const { getLatestCompleteData } = require('./wearableController');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE AI provider
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE on OpenRouter
+const aiService = require('../services/aiService');
 
 /**
  * ✅ CLOCKWORK ELITE INTELLIGENCE ENGINE
@@ -180,15 +173,11 @@ exports.getHealthMetrics = async (req, res) => {
           activeGoals
         );
 
-        console.log('📤 Sending prompt to Kimi K2...');
-        const completion = await openai.chat.completions.create({
-          model: AI_MODEL,
-          max_tokens: 2048,
-          messages: [{ role: 'user', content: prompt }]
-        });
-        aiInsights = completion.choices[0].message.content;
+        console.log('📤 Sending prompt to AI service (multi-provider fallback)...');
+        const aiResponse = await aiService.generateAIContent(prompt, null, 2048);
+        aiInsights = aiResponse.text;
 
-        console.log('✅ Elite AI Coaching Generated Successfully (FREE)');
+        console.log(`✅ Elite AI Coaching Generated Successfully from ${aiResponse.source} (FREE)`);
         console.log(`📊 AI Response Length: ${aiInsights.length} characters`);
       } catch (aiError) {
         console.error('⚠️ AI Generation Error:', aiError.message);

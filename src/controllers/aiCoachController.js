@@ -2,16 +2,9 @@
 // This is THE CORE VALUE PROP - AI that coaches individuals
 const AICoach = require('../models/AICoach');
 const User = require('../models/User');
-const OpenAI = require('openai');
 const recoveryService = require('../services/recoveryService');
 const prDetectionService = require('../services/prDetectionService');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE AI provider
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE on OpenRouter
+const aiService = require('../services/aiService');
 
 // FORGE PERSONALITY SYSTEM PROMPT - Encouraging but Practical
 const FORGE_IDENTITY = `You are FORGE - your AI fitness coach built into ClockWork.
@@ -48,59 +41,6 @@ NEVER:
 - Ignore their stated limitations or injuries
 
 REMEMBER: You're their coach and partner in this. Build the relationship. When they succeed, you succeed together.`;
-
-
-
-// Helper: Generate content with Kimi K2 (OpenRouter) + retry logic
-const AI_TIMEOUT_MS = 30000; // 30 seconds
-const MAX_RETRIES = 3;
-
-async function generateAIContent(prompt, systemPrompt = null, retryCount = 0) {
-  try {
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('AI_TIMEOUT')), AI_TIMEOUT_MS);
-    });
-
-    // Build messages array with system prompt if provided
-    const messages = [];
-    if (systemPrompt) {
-      messages.push({ role: 'system', content: systemPrompt || FORGE_IDENTITY });
-    }
-    messages.push({ role: 'user', content: prompt });
-
-    // Race between API call and timeout
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: AI_MODEL,
-        max_tokens: 1024,
-        messages: messages
-      }),
-      timeoutPromise
-    ]);
-
-    console.log('[FORGE] Response from Kimi K2 (FREE)');
-    return { text: completion.choices[0].message.content, source: 'kimi-k2' };
-  } catch (error) {
-    // Handle timeout
-    if (error.message === 'AI_TIMEOUT') {
-      console.error('[FORGE] Kimi K2 timeout after 30s');
-      throw new Error('FORGE is taking too long - please try again');
-    }
-
-    // Handle rate limiting (429) with retry
-    if (error.status === 429 && retryCount < MAX_RETRIES) {
-      const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-      console.log(`[FORGE] Rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return generateAIContent(prompt, systemPrompt, retryCount + 1);
-    }
-
-    // Handle other errors
-    console.error('[FORGE] Kimi K2 error:', error.status || error.message);
-    throw new Error('FORGE is temporarily unavailable - please try again');
-  }
-}
 
 // ============================================
 // GET MY AI COACH
@@ -319,7 +259,7 @@ Return as JSON with this structure:
 }`;
 
     // Use AI with automatic fallback for program generation
-    const aiResponse = await generateAIContent(prompt);
+    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY);
     let programText = aiResponse.text;
     console.log(`[AI Coach] Program generated from ${aiResponse.source}`);
 
@@ -462,7 +402,7 @@ Return JSON:
 }`;
 
     // Use AI with automatic fallback
-    const aiResponse = await generateAIContent(prompt);
+    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY);
     let workoutText = aiResponse.text;
     console.log(`[AI Coach] Workout generated from ${aiResponse.source}`);
 
@@ -739,7 +679,7 @@ USER'S CURRENT MESSAGE: "${question}"${actionPromptAddition}
 Respond as FORGE. Be direct, helpful, and use ALL information from the conversation history. DO NOT repeat questions.`;
 
     // Use AI with automatic fallback
-    const aiResponse = await generateAIContent(prompt);
+    const aiResponse = await aiService.generateAIContent(prompt, FORGE_IDENTITY);
     const answer = aiResponse.text;
     console.log(`[AI Coach] Response from ${aiResponse.source}`);
 

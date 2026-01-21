@@ -1,14 +1,7 @@
-const OpenAI = require('openai');
 const User = require('../models/User');
 const CalendarEvent = require('../models/CalendarEvent');
 const Goal = require('../models/Goal');
-
-// Initialize OpenRouter with Kimi K2 - 100% FREE
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE
+const aiService = require('../services/aiService');
 
 // Step field mappings - GOD TIER personalization
 const STEP_FIELDS = {
@@ -467,14 +460,11 @@ async function generateInitialProgram(user) {
 
   try {
     const prompt = buildInitialProgramPrompt(user);
-    console.log('🤖 Generating initial training program with Kimi K2 (FREE)...');
+    console.log('🤖 Generating initial training program with AI (multi-provider fallback)...');
 
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    const aiText = completion.choices[0].message.content;
+    const aiResponse = await aiService.generateAIContent(prompt, null, 4096);
+    const aiText = aiResponse.text;
+    console.log(`✓ Program generated from ${aiResponse.source}`);
 
     // Parse JSON from response
     const jsonMatch = aiText.match(/```(?:json)?\s*([\s\S]*?)```/) ||
