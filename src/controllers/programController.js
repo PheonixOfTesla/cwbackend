@@ -431,6 +431,106 @@ CRITICAL VALIDATION RULES:
     }
 
     // ═══════════════════════════════════════════════════════════
+    // VALIDATE PROGRAM STRUCTURE
+    // ═══════════════════════════════════════════════════════════
+    const expectedDaysPerWeek = scheduleData.daysPerWeek || 4;
+
+    // Validate duration
+    if (!programData.durationWeeks || programData.durationWeeks < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid program duration',
+        error: `Program must be at least 8 weeks. AI generated ${programData.durationWeeks} weeks.`,
+        suggestion: 'Regenerating with corrected constraints...'
+      });
+    }
+
+    // Validate weekly templates exist
+    if (!programData.weeklyTemplates || programData.weeklyTemplates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid program structure',
+        error: 'No weekly templates found in program'
+      });
+    }
+
+    // Validate each week has correct number of training days
+    for (const weekTemplate of programData.weeklyTemplates) {
+      if (!weekTemplate.trainingDays || weekTemplate.trainingDays.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid program structure',
+          error: `Week ${weekTemplate.weekNumber} has no training days. Expected ${expectedDaysPerWeek}.`
+        });
+      }
+
+      if (weekTemplate.trainingDays.length !== expectedDaysPerWeek) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid program structure',
+          error: `Week ${weekTemplate.weekNumber} has ${weekTemplate.trainingDays.length} days, expected ${expectedDaysPerWeek}.`,
+          suggestion: 'AI did not follow training frequency constraints'
+        });
+      }
+
+      // Validate each training day has exercises
+      for (const day of weekTemplate.trainingDays) {
+        if (!day.exercises || day.exercises.length < 12) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid program structure',
+            error: `${day.dayOfWeek} in week ${weekTemplate.weekNumber} has ${day.exercises?.length || 0} exercises. Minimum is 12.`
+          });
+        }
+
+        // Validate exercise categories
+        const categories = new Set(day.exercises.map(e => e.category));
+        const requiredCategories = ['warmup', 'main-lift', 'accessory', 'cooldown'];
+        const hasAllCategories = requiredCategories.every(cat => categories.has(cat));
+
+        if (!hasAllCategories) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid program structure',
+            error: `${day.dayOfWeek} in week ${weekTemplate.weekNumber} missing required exercise categories. Has: ${[...categories].join(', ')}. Need: ${requiredCategories.join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Validate nutrition plan
+    if (!programData.nutritionPlan || !programData.nutritionPlan.mealPlan) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid program structure',
+        error: 'Nutrition plan with meal plan is required'
+      });
+    }
+
+    const requiredMeals = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+    const mealPlan = programData.nutritionPlan.mealPlan;
+    for (const mealType of requiredMeals) {
+      if (!mealPlan[mealType]) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid program structure',
+          error: `Missing meal: ${mealType}. Required meals: ${requiredMeals.join(', ')}`
+        });
+      }
+
+      const meal = mealPlan[mealType];
+      if (!meal.name || !meal.description || !meal.calories || !meal.protein || !meal.carbs || !meal.fat || !meal.ingredients || !meal.prepTime) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid program structure',
+          error: `${mealType} is missing required fields: name, description, calories, protein, carbs, fat, ingredients, prepTime`
+        });
+      }
+    }
+
+    console.log('[FORGE] Program validation passed');
+
+    // ═══════════════════════════════════════════════════════════
     // CREATE PROGRAM IN DATABASE
     // ═══════════════════════════════════════════════════════════
     const program = new Program({
@@ -741,8 +841,12 @@ async function generateMealCalendarEvents(userId, program, mealPlan) {
       const eventDate = new Date(program.startDate);
       eventDate.setDate(eventDate.getDate() + (week * 7) + day);
 
-      // Skip past dates
-      if (eventDate < new Date()) continue;
+      // Skip past dates (compare dates only, not timestamps)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const checkDate = new Date(eventDate);
+      checkDate.setHours(0, 0, 0, 0);
+      if (checkDate < today) continue;
 
       // Create CalendarEvent for each meal
       for (const mealType of mealTypes) {

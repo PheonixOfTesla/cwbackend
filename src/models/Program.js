@@ -238,21 +238,28 @@ programSchema.methods.generateCalendarEvents = async function() {
   // Loop through each week template
   for (const weekTemplate of this.weeklyTemplates) {
     for (const trainingDay of weekTemplate.trainingDays) {
-      // Calculate actual date for this week
-      const eventDate = new Date(this.startDate);
-      eventDate.setDate(
-        eventDate.getDate() + ((weekTemplate.weekNumber - 1) * 7)
-      );
+      // Calculate base date for this week
+      const baseDate = new Date(this.startDate);
+      baseDate.setDate(baseDate.getDate() + ((weekTemplate.weekNumber - 1) * 7));
 
-      // Find day of week
+      // Move to start of the week (Sunday)
+      const daysToWeekStart = baseDate.getDay();
+      baseDate.setDate(baseDate.getDate() - daysToWeekStart);
+
+      // Find day of week index
       const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const dayIndex = daysOfWeek.indexOf(trainingDay.dayOfWeek.toLowerCase());
-      const currentDayIndex = eventDate.getDay();
-      const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
-      eventDate.setDate(eventDate.getDate() + daysToAdd);
 
-      // Skip past dates
-      if (eventDate < new Date()) continue;
+      // Calculate actual date within this week
+      const eventDate = new Date(baseDate);
+      eventDate.setDate(eventDate.getDate() + dayIndex);
+
+      // Skip past dates (compare dates only, not timestamps)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const checkDate = new Date(eventDate);
+      checkDate.setHours(0, 0, 0, 0);
+      if (checkDate < today) continue;
 
       // Calculate periodization phase
       const phase = this.periodization.phases.find(
@@ -290,18 +297,28 @@ programSchema.methods.generateCalendarEvents = async function() {
     // Add rest days
     if (weekTemplate.restDays && weekTemplate.restDays.length > 0) {
       for (const restDay of weekTemplate.restDays) {
-        const eventDate = new Date(this.startDate);
-        eventDate.setDate(
-          eventDate.getDate() + ((weekTemplate.weekNumber - 1) * 7)
-        );
+        // Calculate base date for this week
+        const baseDate = new Date(this.startDate);
+        baseDate.setDate(baseDate.getDate() + ((weekTemplate.weekNumber - 1) * 7));
 
+        // Move to start of the week (Sunday)
+        const daysToWeekStart = baseDate.getDay();
+        baseDate.setDate(baseDate.getDate() - daysToWeekStart);
+
+        // Find day of week index
         const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayIndex = daysOfWeek.indexOf(restDay.toLowerCase());
-        const currentDayIndex = eventDate.getDay();
-        const daysToAdd = (dayIndex - currentDayIndex + 7) % 7;
-        eventDate.setDate(eventDate.getDate() + daysToAdd);
 
-        if (eventDate >= new Date()) {
+        // Calculate actual date within this week
+        const eventDate = new Date(baseDate);
+        eventDate.setDate(eventDate.getDate() + dayIndex);
+
+        // Skip past dates (compare dates only, not timestamps)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkRestDate = new Date(eventDate);
+        checkRestDate.setHours(0, 0, 0, 0);
+        if (checkRestDate >= today) {
           events.push({
             userId: this.userId,
             type: 'rest-day',
