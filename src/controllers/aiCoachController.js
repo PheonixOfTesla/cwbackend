@@ -43,6 +43,28 @@ NEVER:
 REMEMBER: You're their coach and partner in this. Build the relationship. When they succeed, you succeed together.`;
 
 // ============================================
+// REQUEST THROTTLING - Prevent rapid-fire API calls
+// ============================================
+const userLastRequestTime = new Map();
+const REQUEST_COOLDOWN_MS = 2000; // 2 seconds between requests
+
+function checkRequestThrottle(userId) {
+  const now = Date.now();
+  const lastRequest = userLastRequestTime.get(userId);
+
+  if (lastRequest && (now - lastRequest) < REQUEST_COOLDOWN_MS) {
+    const waitTime = Math.ceil((REQUEST_COOLDOWN_MS - (now - lastRequest)) / 1000);
+    return {
+      throttled: true,
+      waitTime
+    };
+  }
+
+  userLastRequestTime.set(userId, now);
+  return { throttled: false };
+}
+
+// ============================================
 // GET MY AI COACH
 // ============================================
 exports.getMyAICoach = async (req, res) => {
@@ -547,6 +569,17 @@ exports.askCoach = async (req, res) => {
       });
     }
 
+    // Check request throttle (prevent rapid-fire spam that hits rate limits)
+    const throttle = checkRequestThrottle(userId);
+    if (throttle.throttled) {
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${throttle.waitTime} seconds before sending another message.`,
+        throttled: true,
+        waitTime: throttle.waitTime
+      });
+    }
+
     const user = await User.findById(userId);
     const aiCoach = await AICoach.getOrCreateForUser(userId);
 
@@ -555,7 +588,10 @@ exports.askCoach = async (req, res) => {
     if (aiCoach.aiStats.queriesThisMonth >= features.aiQueriesPerMonth) {
       return res.status(403).json({
         success: false,
-        message: 'Monthly AI query limit reached'
+        message: 'Monthly AI query limit reached. Upgrade to Pro for unlimited AI coaching.',
+        limitReached: true,
+        limit: features.aiQueriesPerMonth,
+        used: aiCoach.aiStats.queriesThisMonth
       });
     }
 

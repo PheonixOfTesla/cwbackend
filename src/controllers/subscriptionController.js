@@ -290,6 +290,7 @@ async function handleCheckoutComplete(session) {
     tier = 'elite';
   }
 
+  // Update Subscription model
   await Subscription.findOneAndUpdate(
     { userId },
     {
@@ -304,7 +305,18 @@ async function handleCheckoutComplete(session) {
     { upsert: true }
   );
 
-  console.log(`Subscription activated for user ${userId}: ${tier}`);
+  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
+  await User.findByIdAndUpdate(userId, {
+    'subscription.tier': tier,
+    'subscription.status': 'active',
+    'subscription.stripeCustomerId': stripeSubscription.customer,
+    'subscription.stripeSubscriptionId': stripeSubscription.id,
+    'subscription.currentPeriodStart': new Date(stripeSubscription.current_period_start * 1000),
+    'subscription.currentPeriodEnd': new Date(stripeSubscription.current_period_end * 1000),
+    'subscription.cancelAtPeriodEnd': false
+  });
+
+  console.log(`Subscription activated for user ${userId}: ${tier} (synced to User model)`);
 }
 
 // Helper: Handle subscription update
@@ -329,6 +341,15 @@ async function handleSubscriptionUpdate(stripeSubscription) {
   subscription.cancelAtPeriodEnd = stripeSubscription.cancel_at_period_end;
 
   await subscription.save();
+
+  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
+  await User.findByIdAndUpdate(subscription.userId, {
+    'subscription.tier': tier,
+    'subscription.status': stripeSubscription.status,
+    'subscription.currentPeriodStart': new Date(stripeSubscription.current_period_start * 1000),
+    'subscription.currentPeriodEnd': new Date(stripeSubscription.current_period_end * 1000),
+    'subscription.cancelAtPeriodEnd': stripeSubscription.cancel_at_period_end
+  });
 }
 
 // Helper: Handle subscription cancel
@@ -345,6 +366,13 @@ async function handleSubscriptionCancel(stripeSubscription) {
   subscription.stripePriceId = null;
 
   await subscription.save();
+
+  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
+  await User.findByIdAndUpdate(subscription.userId, {
+    'subscription.tier': 'free',
+    'subscription.status': 'canceled',
+    'subscription.stripeSubscriptionId': null
+  });
 }
 
 // Helper: Handle payment success
