@@ -7,33 +7,30 @@ const Nutrition = require('../models/Nutrition');
 const aiService = require('../services/aiService');
 
 // ============================================
-// GENERATE PROGRAM (Main FORGE Analysis)
+// SHARED CORE FUNCTION - Used by HTTP endpoint AND aiCoachController
 // ============================================
-exports.generateProgram = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const user = await User.findById(userId);
-    const aiCoach = await AICoach.getOrCreateForUser(userId);
+/**
+ * Generate a complete FORGE program for a user
+ * @param {Object} user - Mongoose User document
+ * @param {Object} aiCoach - Mongoose AICoach document
+ * @returns {Object} { success, error?, program?, stats? }
+ */
+async function generateProgramCore(user, aiCoach) {
+  const userId = user._id;
 
-    if (!user.hasActiveSubscription()) {
-      const trialHours = user.getTrialRemainingHours();
-      return res.status(403).json({
-        success: false,
-        message: 'Subscription required',
-        trialRemaining: trialHours
-      });
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // GATHER ALL USER DATA
-    // ═══════════════════════════════════════════════════════════
-    const competitionData = user.competitionPrep || {};
-    const bodyCompData = user.bodyComposition || {};
-    const lifestyleData = user.lifestyle || {};
-    const experienceData = user.experience || {};
-    const exercisePrefs = user.exercisePreferences || {};
-    const scheduleData = user.schedule || {};
-    const equipmentData = user.equipment || {};
+  // ═══════════════════════════════════════════════════════════
+  // GATHER ALL USER DATA
+  // ═══════════════════════════════════════════════════════════
+  const competitionData = user.competitionPrep || {};
+  const bodyCompData = user.bodyComposition || {};
+  const lifestyleData = user.lifestyle || {};
+  const experienceData = user.experience || {};
+  const exercisePrefs = user.exercisePreferences || {};
+  const scheduleData = user.schedule || {};
+  const equipmentData = user.equipment || {};
+  const limitationsData = user.limitations || {};
+  const dietaryPrefs = user.dietaryPreferences || {};
+  const profileData = user.profile || {};
 
     // Calculate TDEE if needed
     let tdee = 2000;  // Default fallback
@@ -423,11 +420,12 @@ CRITICAL VALIDATION RULES:
       programData = JSON.parse(jsonString);
     } catch (parseErr) {
       console.error('[FORGE] Failed to parse program JSON:', parseErr);
-      return res.status(400).json({
+      return {
         success: false,
+        statusCode: 400,
         message: 'Failed to generate valid program structure',
         error: 'Program generation produced invalid JSON'
-      });
+      };
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -437,50 +435,53 @@ CRITICAL VALIDATION RULES:
 
     // Validate duration
     if (!programData.durationWeeks || programData.durationWeeks < 8) {
-      return res.status(400).json({
+      return {
         success: false,
+        statusCode: 400,
         message: 'Invalid program duration',
-        error: `Program must be at least 8 weeks. AI generated ${programData.durationWeeks} weeks.`,
-        suggestion: 'Regenerating with corrected constraints...'
-      });
+        error: `Program must be at least 8 weeks. AI generated ${programData.durationWeeks} weeks.`
+      };
     }
 
     // Validate weekly templates exist
     if (!programData.weeklyTemplates || programData.weeklyTemplates.length === 0) {
-      return res.status(400).json({
+      return {
         success: false,
+        statusCode: 400,
         message: 'Invalid program structure',
         error: 'No weekly templates found in program'
-      });
+      };
     }
 
     // Validate each week has correct number of training days
     for (const weekTemplate of programData.weeklyTemplates) {
       if (!weekTemplate.trainingDays || weekTemplate.trainingDays.length === 0) {
-        return res.status(400).json({
+        return {
           success: false,
+          statusCode: 400,
           message: 'Invalid program structure',
           error: `Week ${weekTemplate.weekNumber} has no training days. Expected ${expectedDaysPerWeek}.`
-        });
+        };
       }
 
       if (weekTemplate.trainingDays.length !== expectedDaysPerWeek) {
-        return res.status(400).json({
+        return {
           success: false,
+          statusCode: 400,
           message: 'Invalid program structure',
-          error: `Week ${weekTemplate.weekNumber} has ${weekTemplate.trainingDays.length} days, expected ${expectedDaysPerWeek}.`,
-          suggestion: 'AI did not follow training frequency constraints'
-        });
+          error: `Week ${weekTemplate.weekNumber} has ${weekTemplate.trainingDays.length} days, expected ${expectedDaysPerWeek}.`
+        };
       }
 
       // Validate each training day has exercises
       for (const day of weekTemplate.trainingDays) {
         if (!day.exercises || day.exercises.length < 12) {
-          return res.status(400).json({
+          return {
             success: false,
+            statusCode: 400,
             message: 'Invalid program structure',
             error: `${day.dayOfWeek} in week ${weekTemplate.weekNumber} has ${day.exercises?.length || 0} exercises. Minimum is 12.`
-          });
+          };
         }
 
         // Validate exercise categories
@@ -489,42 +490,46 @@ CRITICAL VALIDATION RULES:
         const hasAllCategories = requiredCategories.every(cat => categories.has(cat));
 
         if (!hasAllCategories) {
-          return res.status(400).json({
+          return {
             success: false,
+            statusCode: 400,
             message: 'Invalid program structure',
             error: `${day.dayOfWeek} in week ${weekTemplate.weekNumber} missing required exercise categories. Has: ${[...categories].join(', ')}. Need: ${requiredCategories.join(', ')}`
-          });
+          };
         }
       }
     }
 
     // Validate nutrition plan
     if (!programData.nutritionPlan || !programData.nutritionPlan.mealPlan) {
-      return res.status(400).json({
+      return {
         success: false,
+        statusCode: 400,
         message: 'Invalid program structure',
         error: 'Nutrition plan with meal plan is required'
-      });
+      };
     }
 
     const requiredMeals = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
     const mealPlan = programData.nutritionPlan.mealPlan;
     for (const mealType of requiredMeals) {
       if (!mealPlan[mealType]) {
-        return res.status(400).json({
+        return {
           success: false,
+          statusCode: 400,
           message: 'Invalid program structure',
           error: `Missing meal: ${mealType}. Required meals: ${requiredMeals.join(', ')}`
-        });
+        };
       }
 
       const meal = mealPlan[mealType];
       if (!meal.name || !meal.description || !meal.calories || !meal.protein || !meal.carbs || !meal.fat || !meal.ingredients || !meal.prepTime) {
-        return res.status(400).json({
+        return {
           success: false,
+          statusCode: 400,
           message: 'Invalid program structure',
           error: `${mealType} is missing required fields: name, description, calories, protein, carbs, fat, ingredients, prepTime`
-        });
+        };
       }
     }
 
@@ -612,7 +617,7 @@ CRITICAL VALIDATION RULES:
     // ═══════════════════════════════════════════════════════════
     // RETURN PROGRAM DETAILS
     // ═══════════════════════════════════════════════════════════
-    res.json({
+    return {
       success: true,
       message: 'Program generated successfully',
       program: {
@@ -632,11 +637,51 @@ CRITICAL VALIDATION RULES:
           exercisesPerWorkout: exercisesPerWorkout
         }
       }
-    });
+    };
 
   } catch (error) {
     console.error('[FORGE] Program generation error:', error);
-    res.status(500).json({
+    return {
+      success: false,
+      statusCode: 500,
+      message: 'Failed to generate program',
+      error: error.message
+    };
+  }
+}
+
+// ============================================
+// HTTP ENDPOINT WRAPPER - calls generateProgramCore
+// ============================================
+exports.generateProgram = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    const aiCoach = await AICoach.getOrCreateForUser(userId);
+
+    // Subscription check
+    if (!user.hasActiveSubscription()) {
+      const trialHours = user.getTrialRemainingHours();
+      return res.status(403).json({
+        success: false,
+        message: 'Subscription required',
+        trialRemaining: trialHours
+      });
+    }
+
+    // Call core function
+    const result = await generateProgramCore(user, aiCoach);
+
+    // Translate result to HTTP response
+    if (result.success) {
+      return res.json(result);
+    } else {
+      return res.status(result.statusCode || 400).json(result);
+    }
+
+  } catch (error) {
+    console.error('[FORGE] HTTP endpoint error:', error);
+    return res.status(500).json({
       success: false,
       message: 'Failed to generate program',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -890,5 +935,8 @@ async function generateMealCalendarEvents(userId, program, mealPlan) {
 
   return [];
 }
+
+// Export the core function for use by aiCoachController
+exports.generateProgramCore = generateProgramCore;
 
 module.exports = exports;

@@ -692,7 +692,7 @@ exports.askCoach = async (req, res) => {
     let actionPromptAddition = '';
 
     // ═══════════════════════════════════════════════════════════
-    // GENERATE FULL PROGRAM (Comprehensive 8-week with meals)
+    // GENERATE FULL PROGRAM (Uses shared core function)
     // ═══════════════════════════════════════════════════════════
     if (actionIntent === 'GENERATE_FULL_PROGRAM') {
       try {
@@ -706,261 +706,29 @@ exports.askCoach = async (req, res) => {
           await activeProgram.save();
         }
 
-        // Import program controller's generation logic
-        const programController = require('./programController');
-        const Nutrition = require('../models/Nutrition');
+        // Use shared core function from programController (DRY - single source of truth)
+        const { generateProgramCore } = require('./programController');
 
-        // Gather ALL user data from registration/onboarding
-        const scheduleData = user.schedule || {};
-        const exercisePrefs = user.exercisePreferences || {};
-        const bodyCompData = user.bodyComposition || {};
-        const experienceData = user.experience || {};
-        const competitionData = user.competitionPrep || {};
-        const lifestyleData = user.lifestyle || {};
-        const limitationsData = user.limitations || {};
-        const dietaryPrefs = user.dietaryPreferences || {};
-        const profileData = user.profile || {};
+        // Call the shared program generation function
+        const result = await generateProgramCore(user, aiCoach);
 
-        // Build injury/limitation strings
-        const injuryList = limitationsData.injuries?.map(inj =>
-          `${inj.bodyPart} (${inj.severity}): ${inj.description}${inj.avoidMovements?.length ? ` - AVOID: ${inj.avoidMovements.join(', ')}` : ''}`
-        ).join('; ') || 'none';
-        const exercisesToAvoid = [
-          ...(limitationsData.exercisesToAvoid || []),
-          ...(exercisePrefs.hatedExercises || [])
-        ].filter(Boolean);
-
-        // Calculate TDEE with more accurate formula
-        let tdee = 2000;
-        const weight = profileData.currentWeight || 180;
-        const height = profileData.height || 70; // inches
-        const age = profileData.dateOfBirth ? Math.floor((Date.now() - new Date(profileData.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 30;
-        const gender = profileData.gender || 'male';
-
-        // Mifflin-St Jeor formula
-        let bmr;
-        if (gender === 'female') {
-          bmr = (10 * weight * 0.453592) + (6.25 * height * 2.54) - (5 * age) - 161;
-        } else {
-          bmr = (10 * weight * 0.453592) + (6.25 * height * 2.54) - (5 * age) + 5;
-        }
-
-        const activityMultipliers = {
-          'sedentary': 1.2, 'lightly-active': 1.375, 'moderately-active': 1.55,
-          'very-active': 1.725, 'extremely-active': 1.9
-        };
-        const daysPerWeek = scheduleData.daysPerWeek || 4;
-        const estimatedActivity = daysPerWeek >= 5 ? 'very-active' : daysPerWeek >= 3 ? 'moderately-active' : 'lightly-active';
-        const multiplier = activityMultipliers[lifestyleData.jobType || estimatedActivity] || 1.55;
-        tdee = Math.round(bmr * multiplier);
-
-        // Adjust TDEE for goal
-        if (user.primaryGoal?.type === 'lose-fat') tdee = Math.round(tdee * 0.8); // 20% deficit
-        else if (user.primaryGoal?.type === 'build-muscle') tdee = Math.round(tdee * 1.1); // 10% surplus
-
-        // Calculate macros based on goal
-        let proteinPerLb = 1.0;
-        if (user.primaryGoal?.type === 'build-muscle' || user.primaryGoal?.type === 'build-strength') proteinPerLb = 1.2;
-        const protein = Math.round(weight * proteinPerLb);
-        const fat = Math.round((tdee * 0.25) / 9);
-        const carbs = Math.round((tdee - (protein * 4) - (fat * 9)) / 4);
-
-        // Build comprehensive FORGE prompt with ALL user data
-        const forgePrompt = `You are FORGE - the elite AI coach for ClockWork. Generate a COMPLETE structured training program TAILORED to this specific user.
-
-═══════════════════════════════════════════════════════════
-USER PROFILE: ${user.name}
-═══════════════════════════════════════════════════════════
-DEMOGRAPHICS:
-- Gender: ${profileData.gender || 'not specified'}
-- Age: ${age} years
-- Height: ${height} inches
-- Current Weight: ${weight} lbs
-- Target Weight: ${user.primaryGoal?.targetWeight || 'not specified'}
-
-TRAINING EXPERIENCE:
-- Level: ${experienceData.level || 'intermediate'} (${experienceData.yearsTraining || 1} years training)
-- Primary Discipline: ${experienceData.primaryDiscipline || 'general-fitness'}
-- Secondary: ${experienceData.secondaryDisciplines?.join(', ') || 'none'}
-
-GOAL: ${user.primaryGoal?.type || 'general-health'}
-${user.primaryGoal?.competition ? `COMPETITION: ${user.primaryGoal.competition.type} on ${user.primaryGoal.competition.date} (${user.primaryGoal.competition.federation})` : ''}
-${user.primaryGoal?.strengthTargets ? `STRENGTH TARGETS: Squat ${user.primaryGoal.strengthTargets.squat?.target || '?'}lbs, Bench ${user.primaryGoal.strengthTargets.bench?.target || '?'}lbs, Deadlift ${user.primaryGoal.strengthTargets.deadlift?.target || '?'}lbs` : ''}
-
-SCHEDULE:
-- Days per week: ${scheduleData.daysPerWeek || 4}
-- Session duration: ${scheduleData.sessionDuration || 60} minutes
-- Preferred days: ${scheduleData.preferredDays?.join(', ') || 'monday, tuesday, thursday, friday'}
-- Preferred time: ${scheduleData.preferredTime || 'flexible'}
-
-EQUIPMENT:
-- Location: ${user.equipment?.trainingLocation || 'commercial-gym'}
-- Available: ${user.equipment?.availableEquipment?.join(', ') || 'full commercial gym'}
-${user.equipment?.limitations ? `- Limitations: ${user.equipment.limitations}` : ''}
-
-EXERCISE PREFERENCES:
-- Favorites: ${exercisePrefs.favoriteExercises?.join(', ') || 'compound movements'}
-- Cardio preference: ${exercisePrefs.cardioPreference || 'mixed'}
-${exercisePrefs.cardioActivities?.length ? `- Cardio activities: ${exercisePrefs.cardioActivities.join(', ')}` : ''}
-
-⚠️ INJURIES & LIMITATIONS (CRITICAL - MUST RESPECT):
-${injuryList !== 'none' ? `- Active injuries: ${injuryList}` : '- No reported injuries'}
-${limitationsData.medicalConditions?.length ? `- Medical conditions: ${limitationsData.medicalConditions.join(', ')}` : ''}
-${exercisesToAvoid.length ? `- NEVER INCLUDE THESE EXERCISES: ${exercisesToAvoid.join(', ')}` : ''}
-
-${user.personalRecords?.length > 0 ? `CURRENT LIFTS: ${user.personalRecords.map(pr => `${pr.exerciseName}: ${pr.weight}lbs`).join(', ')}` : ''}
-
-DIETARY PREFERENCES (for meal plan):
-- Diet type: ${dietaryPrefs.dietType || 'flexible'}
-${dietaryPrefs.allergies?.length ? `- ALLERGIES (NEVER INCLUDE): ${dietaryPrefs.allergies.join(', ')}` : ''}
-${dietaryPrefs.intolerances?.length ? `- Intolerances: ${dietaryPrefs.intolerances.join(', ')}` : ''}
-${dietaryPrefs.dislikedFoods?.length ? `- Disliked foods (avoid): ${dietaryPrefs.dislikedFoods.join(', ')}` : ''}
-- Cuisine preferences: ${dietaryPrefs.cuisinePreferences?.join(', ') || 'flexible'}
-- Cooking skill: ${dietaryPrefs.cookingSkill || 'intermediate'}
-- Meal prep time: ${dietaryPrefs.mealPrepTime || 'moderate'}
-- Budget: ${dietaryPrefs.budget || 'moderate'}
-- Meals per day: ${dietaryPrefs.mealsPerDay || 5}
-
-═══════════════════════════════════════════════════════════
-CRITICAL REQUIREMENTS:
-═══════════════════════════════════════════════════════════
-1. Generate EXACTLY ${scheduleData.daysPerWeek || 4} training days per week for 8 weeks
-2. Each workout MUST have 12-18 exercises including warmup, main-lift, accessory, and cooldown
-3. NEVER include exercises the user hates or needs to avoid due to injury
-4. Respect all dietary restrictions in meal plan
-5. Tailor intensity to their experience level (${experienceData.level || 'intermediate'})
-6. Program should progress toward their goal: ${user.primaryGoal?.type || 'general-health'}
-
-Return ONLY valid JSON with this structure:
-{
-  "name": "8-Week ${user.primaryGoal?.type || 'Strength'} Program for ${user.name?.split(' ')[0] || 'You'}",
-  "durationWeeks": 8,
-  "periodization": { "model": "block", "phases": [{"name": "accumulation", "startWeek": 1, "endWeek": 3}, {"name": "strength", "startWeek": 4, "endWeek": 6}, {"name": "peak", "startWeek": 7, "endWeek": 8}] },
-  "nutritionPlan": {
-    "calorieTarget": ${tdee},
-    "macros": { "protein": ${protein}, "carbs": ${carbs}, "fat": ${fat} },
-    "mealPlan": {
-      "breakfast": { "name": "...", "description": "...", "calories": ${Math.round(tdee * 0.25)}, "protein": ${Math.round(protein * 0.2)}, "carbs": ..., "fat": ..., "ingredients": [...], "prepTime": ... },
-      "snack1": { ... },
-      "lunch": { ... },
-      "snack2": { ... },
-      "dinner": { ... }
-    }
-  },
-  "weeklyTemplates": [
-    { "weekNumber": 1, "trainingDays": [...], "restDays": [...] },
-    ... (all 8 weeks)
-  ]
-}`;
-
-        const aiResponse = await aiService.generateAIContent(forgePrompt, 'You are FORGE, the elite AI coach', 16384);
-
-        // Parse response
-        let programData;
-        try {
-          const jsonMatch = aiResponse.text.match(/\{[\s\S]*\}/);
-          programData = JSON.parse(jsonMatch ? jsonMatch[0] : aiResponse.text);
-        } catch (parseErr) {
-          throw new Error('Failed to parse program JSON');
-        }
-
-        // Create Program in database
-        const program = new Program({
-          userId,
-          name: programData.name || `${user.primaryGoal?.type || 'General'} Program`,
-          goal: user.primaryGoal?.type || 'general-health',
-          status: 'active',
-          startDate: new Date(),
-          durationWeeks: programData.durationWeeks || 8,
-          currentWeek: 1,
-          periodization: programData.periodization || { model: 'linear', phases: [] },
-          weeklyTemplates: programData.weeklyTemplates || [],
-          nutritionPlan: programData.nutritionPlan || {},
-          aiGenerated: true,
-          aiRationale: 'Generated via FORGE chat'
-        });
-
-        const savedProgram = await program.save();
-        console.log('[FORGE] Program created:', savedProgram._id);
-
-        // Update AI Coach reference
-        aiCoach.currentProgramId = savedProgram._id;
-        await aiCoach.save();
-
-        // Generate calendar events
-        const calendarEvents = await savedProgram.generateCalendarEvents();
-        console.log('[FORGE] Calendar events created:', calendarEvents.length);
-
-        // Generate meal events
-        let mealEvents = [];
-        if (programData.nutritionPlan?.mealPlan) {
-          const mealTypes = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
-          const mealTimes = { breakfast: '08:00', snack1: '10:30', lunch: '12:30', snack2: '15:30', dinner: '18:30' };
-          const mealEventData = [];
-
-          for (let week = 0; week < savedProgram.durationWeeks; week++) {
-            for (let day = 0; day < 7; day++) {
-              const eventDate = new Date(savedProgram.startDate);
-              eventDate.setDate(eventDate.getDate() + (week * 7) + day);
-
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const checkDate = new Date(eventDate);
-              checkDate.setHours(0, 0, 0, 0);
-              if (checkDate < today) continue;
-
-              for (const mealType of mealTypes) {
-                const mealData = programData.nutritionPlan.mealPlan[mealType];
-                if (mealData) {
-                  mealEventData.push({
-                    userId,
-                    type: 'nutrition',
-                    title: mealData.name,
-                    date: eventDate,
-                    startTime: mealTimes[mealType],
-                    mealData: { mealType, ...mealData },
-                    programId: savedProgram._id,
-                    aiGenerated: true,
-                    status: 'scheduled'
-                  });
-                }
-              }
+        if (result.success) {
+          const stats = result.program.stats;
+          actionResult = {
+            action: 'PROGRAM_GENERATED',
+            programId: result.program._id,
+            stats: {
+              calendarEventsCreated: stats.calendarEventsCreated,
+              mealEventsCreated: stats.mealEventsCreated,
+              totalEventsCreated: stats.totalEventsCreated,
+              weeksPlanned: stats.weeksPlanned
             }
-          }
-
-          if (mealEventData.length > 0) {
-            mealEvents = await CalendarEvent.insertMany(mealEventData);
-            console.log('[FORGE] Meal events created:', mealEvents.length);
-          }
-        }
-
-        // Update nutrition targets
-        const nutrition = await Nutrition.getOrCreateForUser(userId);
-        if (programData.nutritionPlan) {
-          nutrition.targets = {
-            calories: programData.nutritionPlan.calorieTarget,
-            protein: programData.nutritionPlan.macros?.protein || 0,
-            carbs: programData.nutritionPlan.macros?.carbs || 0,
-            fat: programData.nutritionPlan.macros?.fat || 0,
-            calculatedAt: new Date()
           };
-          await nutrition.save();
+
+          actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${result.program.durationWeeks}-week program with ${stats.calendarEventsCreated} workouts and ${stats.mealEventsCreated} meals (${stats.totalEventsCreated} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
+        } else {
+          throw new Error(result.error || result.message || 'Program generation failed');
         }
-
-        const totalEvents = calendarEvents.length + mealEvents.length;
-
-        actionResult = {
-          action: 'PROGRAM_GENERATED',
-          programId: savedProgram._id,
-          stats: {
-            calendarEventsCreated: calendarEvents.length,
-            mealEventsCreated: mealEvents.length,
-            totalEventsCreated: totalEvents,
-            weeksPlanned: savedProgram.durationWeeks
-          }
-        };
-
-        actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${savedProgram.durationWeeks}-week program with ${calendarEvents.length} workouts and ${mealEvents.length} meals (${totalEvents} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
 
       } catch (programErr) {
         console.error('[FORGE] Full program generation error:', programErr);
