@@ -9,11 +9,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// Multiple free AI providers for fallback (all verified free on OpenRouter 2026)
+// Cheapest AI providers on OpenRouter (user has credits, not using free tier)
 const AI_PROVIDERS = [
-  { name: 'Kimi K2', model: 'moonshotai/kimi-k2:free', cost: 0 },
-  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct:free', cost: 0 },
-  { name: 'Mistral Small 3.1', model: 'mistralai/mistral-small-3.1-24b-instruct:free', cost: 0 }
+  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct', cost: 0.00018 }, // $0.18 per 1M tokens
+  { name: 'Mistral Small', model: 'mistralai/mistral-small-2501', cost: 0.0002 }, // $0.20 per 1M tokens
+  { name: 'Gemini Flash', model: 'google/gemini-flash-1.5', cost: 0.000075 } // $0.075 per 1M tokens (cheapest)
 ];
 
 // Configuration
