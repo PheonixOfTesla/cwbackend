@@ -240,12 +240,19 @@ ${intensity ? `INTENSITY LEVEL: ${intensity}` : ''}
 
 IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
 
+EXERCISE COUNT PER WORKOUT (based on experience level):
+${user.experience?.level === 'beginner' ? '- Beginner: 4-6 exercises per workout (keep it simple, focus on form)' : ''}
+${user.experience?.level === 'intermediate' ? '- Intermediate: 6-8 exercises per workout (balanced volume and variety)' : ''}
+${user.experience?.level === 'advanced' ? '- Advanced: 7-10 exercises per workout (higher volume, more variety)' : ''}
+${!user.experience?.level ? '- Default: 6-8 exercises per workout' : ''}
+
 Generate a structured program with:
 1. Program overview and goals
 2. Weekly structure
-3. Each workout with exercises, sets, reps, and rest periods
-4. Progression plan
-5. Deload recommendations
+3. Each workout with the appropriate number of exercises based on experience level
+4. Include exercises, sets, reps, and rest periods
+5. Progression plan
+6. Deload recommendations
 
 Return as JSON with this structure:
 {
@@ -386,6 +393,12 @@ ${recoveryRecommendation === 'active-recovery' ? '- Poor recovery - light mobili
 ${recoveryRecommendation === 'full-intensity' ? '- Normal recovery - train as planned' : ''}
 
 IMPORTANT: Use standard exercise names (e.g., "Barbell Bench Press", "Barbell Squat", "Romanian Deadlift") so we can link to video demonstrations.
+
+EXERCISE COUNT FOR MAIN WORKOUT (based on experience level):
+${user.experience?.level === 'beginner' ? '- Beginner: 4-6 exercises (keep it simple, focus on form)' : ''}
+${user.experience?.level === 'intermediate' ? '- Intermediate: 6-8 exercises (balanced volume and variety)' : ''}
+${user.experience?.level === 'advanced' ? '- Advanced: 7-10 exercises (higher volume, more variety)' : ''}
+${!user.experience?.level ? '- Default: 6-8 exercises' : ''}
 
 Return JSON:
 {

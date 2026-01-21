@@ -635,10 +635,13 @@ PROGRAM REQUIREMENTS - MUST FOLLOW
 
 ${isPowerlifter ? `
 FOR POWERLIFTING - MANDATORY STRUCTURE:
-1. Each workout MUST have 5-8 exercises minimum:
+1. Each workout structure (${experience.level || 'intermediate'} level):
    - Main competition lift OR close variation
    - Secondary movement (paused, tempo, deficit, close-grip, etc.)
-   - 2-3 accessories targeting weak points
+   ${experience.level === 'beginner' ? '- 1-2 accessories targeting weak points (4-6 total exercises)' : ''}
+   ${experience.level === 'intermediate' ? '- 2-3 accessories targeting weak points (6-8 total exercises)' : ''}
+   ${experience.level === 'advanced' ? '- 3-5 accessories targeting weak points (7-10 total exercises)' : ''}
+   ${!experience.level ? '- 2-3 accessories targeting weak points (6-8 total exercises)' : ''}
    - 1-2 prehab/mobility movements
    - Optional: ${needsWeightLoss ? 'CARDIO (required for weight cut)' : 'Cardio if time permits'}
 
@@ -748,7 +751,11 @@ OUTPUT FORMAT - RETURN ONLY VALID JSON
 }
 
 CRITICAL REMINDERS:
-1. MINIMUM 5-6 exercises per workout for serious athletes
+1. EXERCISE COUNT PER WORKOUT (based on experience level):
+   ${experience.level === 'beginner' ? '- Beginner: 4-6 exercises per workout (keep it simple, focus on form)' : ''}
+   ${experience.level === 'intermediate' ? '- Intermediate: 6-8 exercises per workout (balanced volume and variety)' : ''}
+   ${experience.level === 'advanced' ? '- Advanced: 7-10 exercises per workout (higher volume, more variety)' : ''}
+   ${!experience.level ? '- Default: 6-8 exercises per workout' : ''}
 2. ${needsWeightLoss ? 'INCLUDE CARDIO - they need to lose weight!' : 'Cardio optional based on goals'}
 3. Use their FAVORITE exercises when possible: ${exercisePrefs.favoriteExercises?.join(', ') || 'none specified'}
 4. AVOID: ${[...(exercisePrefs.hatedExercises || []), ...(limitations.exercisesToAvoid || [])].join(', ') || 'nothing specific'}
