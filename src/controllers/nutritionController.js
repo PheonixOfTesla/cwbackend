@@ -13,7 +13,7 @@ const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
 });
-const AI_MODEL = 'moonshot/moonshot-v1-128k'; // Kimi K2 - FREE
+const AI_MODEL = 'moonshotai/kimi-k2:free'; // Kimi K2 - FREE
 
 // ============================================
 // TDEE & MACRO CALCULATION (Mifflin-St Jeor)
