@@ -694,9 +694,17 @@ exports.askCoach = async (req, res) => {
     // ═══════════════════════════════════════════════════════════
     // GENERATE FULL PROGRAM (Comprehensive 8-week with meals)
     // ═══════════════════════════════════════════════════════════
-    if (actionIntent === 'GENERATE_FULL_PROGRAM' && !hasActiveProgram) {
+    if (actionIntent === 'GENERATE_FULL_PROGRAM') {
       try {
         console.log('[FORGE] Executing action: GENERATE_FULL_PROGRAM');
+
+        // If user already has an active program, deactivate it first
+        if (hasActiveProgram) {
+          console.log('[FORGE] Deactivating existing program:', activeProgram._id);
+          activeProgram.status = 'completed';
+          activeProgram.endDate = new Date();
+          await activeProgram.save();
+        }
 
         // Import program controller's generation logic
         const programController = require('./programController');
