@@ -9,11 +9,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// Multiple free AI providers for fallback
+// Multiple free AI providers for fallback (all verified free on OpenRouter 2026)
 const AI_PROVIDERS = [
   { name: 'Kimi K2', model: 'moonshotai/kimi-k2:free', cost: 0 },
-  { name: 'Llama 3.1 8B', model: 'meta-llama/llama-3.1-8b-instruct:free', cost: 0 },
-  { name: 'Mistral 7B', model: 'mistralai/mistral-7b-instruct:free', cost: 0 }
+  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct:free', cost: 0 },
+  { name: 'Mistral Small 3.1', model: 'mistralai/mistral-small-3.1-24b-instruct:free', cost: 0 }
 ];
 
 // Configuration

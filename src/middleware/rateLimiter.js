@@ -12,7 +12,8 @@ const rateLimit = require('express-rate-limit');
 const rateLimitConfig = {
   standardHeaders: 'draft-7', // Use draft-7 standard (RateLimit-* headers)
   legacyHeaders: false,
-  // trust proxy is handled by app.set('trust proxy', true) in server.js
+  // trust proxy is handled by app.set('trust proxy', 1) in server.js
+  // Using numeric value (1) instead of true for security
 }
 
 

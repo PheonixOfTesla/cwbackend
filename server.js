@@ -67,7 +67,9 @@ const corsOptions = {
 };
 
 // Trust proxy for Railway/production deployments (fixes rate limiting)
-app.set('trust proxy', true);
+// Set to 1 because Railway has exactly 1 proxy layer between internet and app
+// Using true is insecure - allows X-Forwarded-For header manipulation
+app.set('trust proxy', 1);
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
