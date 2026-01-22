@@ -1,5 +1,5 @@
 // Src/services/aiService.js - Bulletproof AI Service
-// Priority: Ollama (local) → OpenRouter → Fallback (never fails)
+// Priority: Kimi K2 (free, 32k) → Ollama (local) → Llama → Fallback
 
 const OpenAI = require('openai');
 
@@ -7,40 +7,51 @@ const OpenAI = require('openai');
 // PROVIDER CONFIGURATION
 // ═══════════════════════════════════════════════════════════
 
-// Ollama client (local - fastest, free, no rate limits)
-const ollama = new OpenAI({
-  baseURL: process.env.OLLAMA_URL || 'http://localhost:11434/v1',
-  apiKey: 'ollama' // Ollama doesn't need a real key
-});
-
-// OpenRouter client (cloud fallback)
+// OpenRouter client (Kimi K2 FREE + Llama backup)
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY || 'dummy'
 });
 
-// Provider chain - Ollama first, then OpenRouter
+// Ollama client (local fallback)
+const ollama = new OpenAI({
+  baseURL: process.env.OLLAMA_URL || 'http://localhost:11434/v1',
+  apiKey: 'ollama'
+});
+
+// Provider chain - Kimi K2 FREE first (32k context, $0), then fallbacks
 const AI_PROVIDERS = [
+  {
+    name: 'Kimi K2 Free',
+    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M tokens, 32k context
+    client: openrouter,
+    timeout: 90000,   // 90s - it's powerful but can be slow
+    isLocal: false,
+    isFree: true
+  },
   {
     name: 'Ollama Local',
     model: process.env.OLLAMA_MODEL || 'llama3.2',
     client: ollama,
-    timeout: 60000,  // 60s for local
-    isLocal: true
+    timeout: 60000,
+    isLocal: true,
+    isFree: true
   },
   {
     name: 'Llama 3.3 70B',
     model: 'meta-llama/llama-3.3-70b-instruct',
     client: openrouter,
-    timeout: 120000,  // 120s for cloud
-    isLocal: false
+    timeout: 120000,
+    isLocal: false,
+    isFree: false  // Uses OpenRouter credits
   },
   {
     name: 'Llama 3.1 8B',
     model: 'meta-llama/llama-3.1-8b-instruct',
     client: openrouter,
     timeout: 60000,
-    isLocal: false
+    isLocal: false,
+    isFree: false
   }
 ];
 
