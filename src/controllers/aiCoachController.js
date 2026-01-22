@@ -78,62 +78,10 @@ function shouldBypassSubscription() {
          process.env.BYPASS_PAYWALL === 'true';
 }
 
-// ... inside exports.generateProgram and exports.askCoach ...
-
-    const features = user.getSubscriptionFeatures();
-
-    // Check and expire trial if needed
-    await user.checkTrialExpiration();
-
-    // DEBUG LOG: Check user status
-    console.log(`[Auth] User: ${user.email} | Subscribed: ${user.hasActiveSubscription()} | Trial Remaining: ${user.getTrialRemainingHours().toFixed(1)}h`);
-
-    // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
-      const trialHours = user.getTrialRemainingHours();
-      return res.status(403).json({
-        success: false,
-        message: trialHours > 0
-          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
-          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
-        trialExpired: true,
-        requiresSubscription: true,
-        trialRemaining: trialHours
-      });
-    }
-  try {
-    const userId = req.user.id;
-
-    // Get or create AI Coach for this user
-    const aiCoach = await AICoach.getOrCreateForUser(userId);
-
-    res.json({
-      success: true,
-      aiCoach: {
-        communicationStyle: aiCoach.communicationStyle,
-        trainingPhilosophy: aiCoach.trainingPhilosophy,
-        preferences: aiCoach.preferences,
-        trainingHistory: aiCoach.trainingHistory,
-        performanceMetrics: aiCoach.performanceMetrics,
-        currentProgram: aiCoach.currentProgram,
-        aiStats: {
-          totalQueries: aiCoach.aiStats.totalQueries,
-          queriesThisMonth: aiCoach.aiStats.queriesThisMonth,
-          averageSatisfaction: aiCoach.aiStats.averageSatisfaction
-        },
-        recentLearnings: aiCoach.learnings.slice(-5)
-      }
-    });
-
-  } catch (error) {
-    console.error('Get AI Coach error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get AI Coach',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
+// ============================================
+// GET MY AI COACH
+// ============================================
+exports.getMyAICoach = async (req, res) => {
 
 // ============================================
 // UPDATE AI COACH PREFERENCES
