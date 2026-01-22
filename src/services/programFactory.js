@@ -224,30 +224,52 @@ async function generateHabits(userId, habitPlan) {
 
   const Habit = require('../models/Habit');
   
-  // Clean up existing AI-generated habits to avoid duplicates/stale data?
-  // For now, let's just add new ones. User can delete old ones.
-  // Or check if a habit with same name exists.
-
   const createdHabits = [];
   
+  // Valid enums from Habit model
+  const VALID_FREQUENCIES = ['daily', 'weekdays', 'weekends', 'specific-days', 'x-per-week'];
+  const VALID_TRACKING = ['boolean', 'quantity', 'duration', 'rating'];
+
   for (const h of habitPlan) {
     // Check if habit already exists
     const exists = await Habit.findOne({ userId, name: h.name, isActive: true });
     if (exists) continue;
 
-    const newHabit = await Habit.create({
-      userId,
-      name: h.name,
-      description: h.description,
-      category: h.category || 'custom',
-      frequency: h.frequency || 'daily',
-      trackingType: h.trackingType || 'boolean',
-      targetValue: h.targetValue || 1,
-      unit: h.unit || '',
-      icon: h.icon || 'check-circle',
-      color: h.color || '#f97316'
-    });
-    createdHabits.push(newHabit);
+    // SANITIZE DATA
+    let frequency = (h.frequency || 'daily').toLowerCase();
+    let trackingType = (h.trackingType || 'boolean').toLowerCase();
+    let timesPerWeek = h.timesPerWeek || 7;
+
+    // Fix common AI hallucinations
+    if (frequency === 'weekly' || frequency === 'once a week') {
+      frequency = 'x-per-week';
+      timesPerWeek = 1;
+    }
+    if (!VALID_FREQUENCIES.includes(frequency)) {
+      frequency = 'daily'; // Fallback
+    }
+    if (!VALID_TRACKING.includes(trackingType)) {
+      trackingType = 'boolean'; // Fallback
+    }
+
+    try {
+      const newHabit = await Habit.create({
+        userId,
+        name: h.name,
+        description: h.description,
+        category: h.category || 'custom',
+        frequency,
+        timesPerWeek,
+        trackingType,
+        targetValue: h.targetValue || 1,
+        unit: h.unit || '',
+        icon: h.icon || 'check-circle',
+        color: h.color || '#f97316'
+      });
+      createdHabits.push(newHabit);
+    } catch (err) {
+      console.warn(`[ProgramFactory] Skipped invalid habit "${h.name}":`, err.message);
+    }
   }
 
   return createdHabits;
