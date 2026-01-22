@@ -19,37 +19,49 @@ const ollama = new OpenAI({
   apiKey: 'ollama'
 });
 
-// Provider chain - Kimi K2 FREE first (32k context, $0), then fallbacks
+// Provider chain - Kimi K2 FREE first, then paid K2, then other fallbacks
 const AI_PROVIDERS = [
   {
     name: 'Kimi K2 Free',
-    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M tokens, 32k context
+    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M tokens, 32k context (50/day, 1000/day with $5 credit)
     client: openrouter,
-    timeout: 90000,   // 90s - it's powerful but can be slow
+    timeout: 90000,
     isLocal: false,
-    isFree: true
+    isFree: true,
+    extraHeaders: {
+      'HTTP-Referer': 'https://clockwork.fit',
+      'X-Title': 'ClockWork Fitness'
+    }
   },
   {
-    name: 'Ollama Local',
-    model: process.env.OLLAMA_MODEL || 'llama3.2',
-    client: ollama,
-    timeout: 60000,
-    isLocal: true,
-    isFree: true
+    name: 'Kimi K2 Paid',
+    model: 'moonshotai/kimi-k2',  // PAID: $1.25/1M tokens, unlimited
+    client: openrouter,
+    timeout: 90000,
+    isLocal: false,
+    isFree: false,
+    extraHeaders: {
+      'HTTP-Referer': 'https://clockwork.fit',
+      'X-Title': 'ClockWork Fitness'
+    }
+  },
+  {
+    name: 'DeepSeek V3',
+    model: 'deepseek/deepseek-chat',  // $0.27/1M in, $1.10/1M out - very cheap backup
+    client: openrouter,
+    timeout: 90000,
+    isLocal: false,
+    isFree: false,
+    extraHeaders: {
+      'HTTP-Referer': 'https://clockwork.fit',
+      'X-Title': 'ClockWork Fitness'
+    }
   },
   {
     name: 'Llama 3.3 70B',
     model: 'meta-llama/llama-3.3-70b-instruct',
     client: openrouter,
     timeout: 120000,
-    isLocal: false,
-    isFree: false  // Uses OpenRouter credits
-  },
-  {
-    name: 'Llama 3.1 8B',
-    model: 'meta-llama/llama-3.1-8b-instruct',
-    client: openrouter,
-    timeout: 60000,
     isLocal: false,
     isFree: false
   }
@@ -108,7 +120,7 @@ async function generateAIContent(prompt, systemPrompt = null, maxTokens = 2048) 
 }
 
 /**
- * Call a single provider with timeout
+ * Call a single provider with timeout and proper headers
  */
 async function callProvider(provider, prompt, systemPrompt, maxTokens) {
   const messages = [];
@@ -122,14 +134,28 @@ async function callProvider(provider, prompt, systemPrompt, maxTokens) {
     setTimeout(() => reject(new Error(`Timeout after ${provider.timeout}ms`)), provider.timeout);
   });
 
+  // Build request options
+  const requestOptions = {
+    model: provider.model,
+    max_tokens: maxTokens,
+    messages: messages,
+    temperature: 0.7
+  };
+
+  // Add extra headers for OpenRouter (provider priority, caching)
+  if (provider.extraHeaders || !provider.isLocal) {
+    requestOptions.headers = {
+      ...provider.extraHeaders,
+      // Provider fallback order for OpenRouter
+      'openrouter-provider-order': 'moonshot,deepinfra,together',
+      // Enable prompt caching (30% fewer calls)
+      'openrouter-cache-prompt': 'true'
+    };
+  }
+
   // Race between API call and timeout
   const completion = await Promise.race([
-    provider.client.chat.completions.create({
-      model: provider.model,
-      max_tokens: maxTokens,
-      messages: messages,
-      temperature: 0.7
-    }),
+    provider.client.chat.completions.create(requestOptions),
     timeoutPromise
   ]);
 
@@ -201,41 +227,52 @@ function getFallbackProgram() {
 function generateFallbackWeeklyTemplates() {
   const templates = [];
 
-  // Upper/Lower split for 4 days
+  // Upper/Lower split for 4 days - with warmups, primaries, accessories
   const upperDay = {
     exercises: [
-      { name: "Barbell Bench Press", category: "main-lift", sets: 4, reps: "6-8", rpe: 8 },
-      { name: "Barbell Row", category: "main-lift", sets: 4, reps: "6-8", rpe: 8 },
-      { name: "Overhead Press", category: "accessory", sets: 3, reps: "8-10", rpe: 7 },
-      { name: "Lat Pulldown", category: "accessory", sets: 3, reps: "10-12", rpe: 7 },
-      { name: "Dumbbell Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7 },
-      { name: "Tricep Pushdown", category: "accessory", sets: 3, reps: "12-15", rpe: 7 }
+      // Warmups
+      { name: "Arm Circles", category: "warmup", sets: 2, reps: "10 each direction", notes: "Small to large circles" },
+      { name: "Band Pull-Aparts", category: "warmup", sets: 2, reps: "15", notes: "Activate rear delts" },
+      { name: "Push-up Plus", category: "warmup", sets: 2, reps: "10", notes: "Protract shoulders at top" },
+      // Primary
+      { name: "Barbell Bench Press", category: "primary", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Control the eccentric" },
+      { name: "Barbell Row", category: "primary", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Pull to lower chest" },
+      // Accessories
+      { name: "Overhead Press", category: "accessory", sets: 3, reps: "8-10", rpe: 7, rest: "90 sec" },
+      { name: "Lat Pulldown", category: "accessory", sets: 3, reps: "10-12", rpe: 7, rest: "90 sec" },
+      { name: "Dumbbell Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7, rest: "60 sec" },
+      { name: "Tricep Pushdown", category: "accessory", sets: 3, reps: "12-15", rpe: 7, rest: "60 sec" }
     ]
   };
 
   const lowerDay = {
     exercises: [
-      { name: "Barbell Squat", category: "main-lift", sets: 4, reps: "5-6", rpe: 8 },
-      { name: "Romanian Deadlift", category: "main-lift", sets: 4, reps: "8-10", rpe: 7 },
-      { name: "Leg Press", category: "accessory", sets: 3, reps: "10-12", rpe: 7 },
-      { name: "Leg Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7 },
-      { name: "Calf Raise", category: "accessory", sets: 4, reps: "15-20", rpe: 7 },
-      { name: "Plank", category: "cooldown", sets: 3, reps: "60 sec", rpe: 6 }
+      // Warmups
+      { name: "Leg Swings", category: "warmup", sets: 2, reps: "10 each leg", notes: "Front-to-back and side-to-side" },
+      { name: "Bodyweight Squats", category: "warmup", sets: 2, reps: "10", notes: "Slow and controlled" },
+      { name: "Hip Circles", category: "warmup", sets: 2, reps: "10 each direction", notes: "Open up the hips" },
+      // Primary
+      { name: "Barbell Squat", category: "primary", sets: 4, reps: "5-6", rpe: 8, rest: "3-4 min", notes: "Hit depth, drive through heels" },
+      { name: "Romanian Deadlift", category: "primary", sets: 4, reps: "8-10", rpe: 7, rest: "3-4 min", notes: "Feel the hamstring stretch" },
+      // Accessories
+      { name: "Leg Press", category: "accessory", sets: 3, reps: "10-12", rpe: 7, rest: "90 sec" },
+      { name: "Leg Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7, rest: "60 sec" },
+      { name: "Calf Raise", category: "accessory", sets: 4, reps: "15-20", rpe: 7, rest: "60 sec" },
+      { name: "Plank", category: "accessory", sets: 3, reps: "60 sec", rpe: 6 }
     ]
   };
 
   for (let week = 1; week <= 8; week++) {
     const isDeload = week === 4 || week === 8;
-    const rpeModifier = isDeload ? -2 : 0;
 
     templates.push({
       weekNumber: week,
       deloadWeek: isDeload,
       trainingDays: [
-        { dayOfWeek: "monday", focus: "Upper Body", ...upperDay },
-        { dayOfWeek: "tuesday", focus: "Lower Body", ...lowerDay },
-        { dayOfWeek: "thursday", focus: "Upper Body", ...upperDay },
-        { dayOfWeek: "friday", focus: "Lower Body", ...lowerDay }
+        { dayOfWeek: "monday", focus: "Upper Power", ...upperDay },
+        { dayOfWeek: "tuesday", focus: "Lower Power", ...lowerDay },
+        { dayOfWeek: "thursday", focus: "Upper Hypertrophy", ...upperDay },
+        { dayOfWeek: "friday", focus: "Lower Hypertrophy", ...lowerDay }
       ],
       restDays: ["wednesday", "saturday", "sunday"]
     });
