@@ -70,15 +70,6 @@ function checkRequestThrottle(userId) {
 }
 
 // ============================================
-// DEV MODE BYPASS - Skip subscription in development
-// ============================================
-function shouldBypassSubscription() {
-  return process.env.NODE_ENV === 'development' ||
-         process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
-         process.env.BYPASS_PAYWALL === 'true';
-}
-
-// ============================================
 // GET MY AI COACH
 // ============================================
 exports.getMyAICoach = async (req, res) => {
@@ -176,8 +167,8 @@ exports.generateProgram = async (req, res) => {
     // Check and expire trial if needed
     await user.checkTrialExpiration();
 
-    // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
+    // PAYWALL: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
@@ -413,8 +404,8 @@ exports.generateWorkout = async (req, res) => {
     // Check and expire trial if needed
     await user.checkTrialExpiration();
 
-    // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
+    // PAYWALL: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
@@ -672,8 +663,8 @@ exports.askCoach = async (req, res) => {
     // Check and expire trial if needed
     await user.checkTrialExpiration();
 
-    // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
+    // PAYWALL: After 24h trial, block unless they have active subscription
+    if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,

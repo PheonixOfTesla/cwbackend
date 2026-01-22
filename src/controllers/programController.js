@@ -6,45 +6,41 @@ const AICoach = require('../models/AICoach');
 const Nutrition = require('../models/Nutrition');
 const aiService = require('../services/aiService');
 
-// DEV MODE BYPASS - Skip subscription in development
-function shouldBypassSubscription() {
-  return process.env.NODE_ENV === 'development' ||
-         process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
-         process.env.BYPASS_PAYWALL === 'true';
-}
-
-// ... inside generateProgram ...
-
-    // 1. Subscription Check
-    console.log(`[Auth] User: ${user.email} | Subscribed: ${user.hasActiveSubscription()} | Trial Remaining: ${user.getTrialRemainingHours().toFixed(1)}h`);
-
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
-
 // ============================================
 // GENERATE PROGRAM (Main FORGE Analysis)
 // ============================================
 exports.generateProgram = async (req, res) => {
   try {
     const userId = req.user.id;
-    const User = require('../models/User'); // ensure model is loaded
+    const User = require('../models/User');
     const user = await User.findById(userId);
     const programFactory = require('../services/programFactory');
 
-    // 1. Subscription Check (with dev bypass)
-    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
+    // Check trial expiration
+    await user.checkTrialExpiration();
+
+    // Log subscription status
+    console.log(`[Auth] User: ${user.email} | Subscribed: ${user.hasActiveSubscription()} | Trial: ${user.getTrialRemainingHours().toFixed(1)}h remaining`);
+
+    // Subscription Check - PAYWALL ENFORCED
+    if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,
-        message: 'Subscription required',
+        message: trialHours > 0
+          ? `Free trial ends in ${Math.ceil(trialHours)} hours. Subscribe for full access.`
+          : 'Subscription required for program generation.',
+        trialExpired: trialHours <= 0,
+        requiresSubscription: true,
         trialRemaining: trialHours
       });
     }
 
-    // 2. Call Factory (Centralized Logic)
+    // Call Factory (Centralized Logic)
     console.log('[ProgramController] Delegating generation to ProgramFactory');
     const result = await programFactory.createProgramForUser(userId, { source: 'ui' });
 
-    // 3. Return Success
+    // Return Success
     res.json({
       success: true,
       message: 'Program generated successfully',
