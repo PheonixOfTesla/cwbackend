@@ -90,11 +90,17 @@ function shouldBypassSubscription() {
 
     // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
     if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
-
-// ============================================
-// GET MY AI COACH
-// ============================================
-exports.getMyAICoach = async (req, res) => {
+      const trialHours = user.getTrialRemainingHours();
+      return res.status(403).json({
+        success: false,
+        message: trialHours > 0
+          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
+          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
+        trialExpired: true,
+        requiresSubscription: true,
+        trialRemaining: trialHours
+      });
+    }
   try {
     const userId = req.user.id;
 
