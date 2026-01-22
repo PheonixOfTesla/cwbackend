@@ -129,9 +129,9 @@ USER DATA:
 - Injuries: ${ctx.injuries.map(i => i.bodyPart).join(', ') || 'none'}
 - Calories: ${ctx.tdee} (P:${ctx.protein}g C:${ctx.carbs}g F:${ctx.fat}g)
 
-EXERCISE CATEGORIES:
+EXERCISE CATEGORIES (use EXACTLY these values):
 - "warmup": Active warmups to prepare the body (3 exercises)
-- "primary": Main compound lifts (1-2 exercises)
+- "main-lift": Main compound lifts (1-2 exercises)
 - "accessory": Supporting movements (3-5 exercises)
 
 OUTPUT JSON ONLY:
@@ -162,7 +162,7 @@ OUTPUT JSON ONLY:
           "focus": "Upper Power",
           "exercises": [
             { "name": "Arm Circles", "category": "warmup", "sets": 2, "reps": "10 each", "notes": "Warm up shoulders" },
-            { "name": "Bench Press", "category": "primary", "sets": 4, "reps": "6-8", "rpe": 8 },
+            { "name": "Bench Press", "category": "main-lift", "sets": 4, "reps": "6-8", "rpe": 8 },
             { "name": "Incline Dumbbell Press", "category": "accessory", "sets": 3, "reps": "10-12", "rpe": 7 }
           ]
         }
@@ -395,12 +395,12 @@ function buildDayExercises(focus, exerciseBank, experienceLevel, isDeload) {
   });
   primaryExercises = [...new Set(primaryExercises)];
 
-  // Add 1-2 primary lifts
+  // Add 1-2 primary lifts (main-lift category)
   const primaryCount = 2;
   for (let i = 0; i < Math.min(primaryCount, primaryExercises.length); i++) {
     exercises.push({
       name: primaryExercises[i],
-      category: 'primary',
+      category: 'main-lift',
       sets: Math.round(4 * setsMultiplier),
       reps: '5-6',
       rpe: rpeBase,
@@ -536,6 +536,33 @@ function ensureValidStructure(data, context) {
   // Ensure weekly templates
   if (!data.weeklyTemplates || data.weeklyTemplates.length === 0) {
     data.weeklyTemplates = buildWorkoutTemplates(context);
+  }
+
+  // SANITIZE EXERCISE CATEGORIES - Fix any invalid values from AI
+  // Valid: 'main-lift', 'accessory', 'warmup', 'cooldown'
+  const validCategories = ['main-lift', 'accessory', 'warmup', 'cooldown'];
+  if (data.weeklyTemplates && Array.isArray(data.weeklyTemplates)) {
+    data.weeklyTemplates.forEach(week => {
+      if (week.trainingDays && Array.isArray(week.trainingDays)) {
+        week.trainingDays.forEach(day => {
+          if (day.exercises && Array.isArray(day.exercises)) {
+            day.exercises.forEach(ex => {
+              // Convert common AI mistakes
+              if (ex.category === 'primary') ex.category = 'main-lift';
+              if (ex.category === 'compound') ex.category = 'main-lift';
+              if (ex.category === 'secondary') ex.category = 'accessory';
+              if (ex.category === 'isolation') ex.category = 'accessory';
+              if (ex.category === 'warm-up') ex.category = 'warmup';
+              if (ex.category === 'cool-down') ex.category = 'cooldown';
+              // Default to accessory if still invalid
+              if (!validCategories.includes(ex.category)) {
+                ex.category = 'accessory';
+              }
+            });
+          }
+        });
+      }
+    });
   }
 
   return data;

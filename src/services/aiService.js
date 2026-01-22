@@ -230,8 +230,8 @@ function generateFallbackWeeklyTemplates() {
       { name: "Band Pull-Aparts", category: "warmup", sets: 2, reps: "15", notes: "Activate rear delts" },
       { name: "Push-up Plus", category: "warmup", sets: 2, reps: "10", notes: "Protract shoulders at top" },
       // Primary
-      { name: "Barbell Bench Press", category: "primary", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Control the eccentric" },
-      { name: "Barbell Row", category: "primary", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Pull to lower chest" },
+      { name: "Barbell Bench Press", category: "main-lift", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Control the eccentric" },
+      { name: "Barbell Row", category: "main-lift", sets: 4, reps: "6-8", rpe: 8, rest: "3-4 min", notes: "Pull to lower chest" },
       // Accessories
       { name: "Overhead Press", category: "accessory", sets: 3, reps: "8-10", rpe: 7, rest: "90 sec" },
       { name: "Lat Pulldown", category: "accessory", sets: 3, reps: "10-12", rpe: 7, rest: "90 sec" },
@@ -247,8 +247,8 @@ function generateFallbackWeeklyTemplates() {
       { name: "Bodyweight Squats", category: "warmup", sets: 2, reps: "10", notes: "Slow and controlled" },
       { name: "Hip Circles", category: "warmup", sets: 2, reps: "10 each direction", notes: "Open up the hips" },
       // Primary
-      { name: "Barbell Squat", category: "primary", sets: 4, reps: "5-6", rpe: 8, rest: "3-4 min", notes: "Hit depth, drive through heels" },
-      { name: "Romanian Deadlift", category: "primary", sets: 4, reps: "8-10", rpe: 7, rest: "3-4 min", notes: "Feel the hamstring stretch" },
+      { name: "Barbell Squat", category: "main-lift", sets: 4, reps: "5-6", rpe: 8, rest: "3-4 min", notes: "Hit depth, drive through heels" },
+      { name: "Romanian Deadlift", category: "main-lift", sets: 4, reps: "8-10", rpe: 7, rest: "3-4 min", notes: "Feel the hamstring stretch" },
       // Accessories
       { name: "Leg Press", category: "accessory", sets: 3, reps: "10-12", rpe: 7, rest: "90 sec" },
       { name: "Leg Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7, rest: "60 sec" },
