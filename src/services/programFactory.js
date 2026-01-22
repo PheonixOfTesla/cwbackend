@@ -533,13 +533,13 @@ async function manualGenerateWorkoutEvents(userId, program) {
       events.push({
         userId,
         type: 'workout',
-        title: day.focus || `Week ${week.weekNumber} Workout`,
+        title: day.focus || day.dayOfWeek || `Week ${week.weekNumber} Workout`,
         date: eventDate,
         startTime: '09:00',
         exercises: day.exercises || [],
         programId: program._id,
         weekNumber: week.weekNumber,
-        periodizationPhase: week.deloadWeek ? 'deload' : 'standard',
+        periodizationPhase: week.deloadWeek ? 'deload' : (week.weekNumber <= 4 ? 'accumulation' : 'intensity'),
         aiGenerated: true,
         status: 'scheduled'
       });
