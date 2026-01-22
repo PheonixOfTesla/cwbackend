@@ -44,6 +44,11 @@ const calendarEventSchema = new mongoose.Schema({
   // Workout exercises (for inline display without needing to load Workout)
   exercises: [{
     name: String,
+    category: {
+      type: String,
+      enum: ['warmup', 'main-lift', 'accessory', 'cooldown'],
+      default: 'accessory'
+    },
     sets: Number,
     reps: String,
     rest: String,
