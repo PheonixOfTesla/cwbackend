@@ -129,6 +129,11 @@ USER DATA:
 - Injuries: ${ctx.injuries.map(i => i.bodyPart).join(', ') || 'none'}
 - Calories: ${ctx.tdee} (P:${ctx.protein}g C:${ctx.carbs}g F:${ctx.fat}g)
 
+EXERCISE CATEGORIES:
+- "warmup": Active warmups to prepare the body (3 exercises)
+- "primary": Main compound lifts (1-2 exercises)
+- "accessory": Supporting movements (3-5 exercises)
+
 OUTPUT JSON ONLY:
 {
   "name": "Program Name",
@@ -154,8 +159,11 @@ OUTPUT JSON ONLY:
       "trainingDays": [
         {
           "dayOfWeek": "${ctx.preferredDays[0] || 'monday'}",
+          "focus": "Upper Power",
           "exercises": [
-            { "name": "Exercise", "category": "main-lift", "sets": 4, "reps": "6-8", "rpe": 8 }
+            { "name": "Arm Circles", "category": "warmup", "sets": 2, "reps": "10 each", "notes": "Warm up shoulders" },
+            { "name": "Bench Press", "category": "primary", "sets": 4, "reps": "6-8", "rpe": 8 },
+            { "name": "Incline Dumbbell Press", "category": "accessory", "sets": 3, "reps": "10-12", "rpe": 7 }
           ]
         }
       ]
@@ -255,24 +263,29 @@ function getExerciseBank(discipline, equipment, hatedExercises) {
 
   const banks = {
     powerlifting: {
-      'upper-push': ['Barbell Bench Press', 'Incline Bench Press', 'Close Grip Bench Press', 'Overhead Press', 'Dumbbell Press'],
-      'upper-pull': ['Barbell Row', 'Pull-ups', 'Lat Pulldown', 'Cable Row', 'Face Pulls'],
-      'lower-quad': ['Barbell Squat', 'Front Squat', 'Leg Press', 'Bulgarian Split Squat', 'Lunges'],
-      'lower-hip': ['Conventional Deadlift', 'Romanian Deadlift', 'Sumo Deadlift', 'Hip Thrust', 'Good Mornings'],
-      'accessory': ['Dumbbell Curl', 'Tricep Pushdown', 'Lateral Raise', 'Rear Delt Fly', 'Plank']
+      'upper-push': ['Barbell Bench Press', 'Incline Bench Press', 'Close Grip Bench Press', 'Overhead Press', 'Dumbbell Press', 'Floor Press', 'Dips'],
+      'upper-pull': ['Barbell Row', 'Pull-ups', 'Lat Pulldown', 'Cable Row', 'Face Pulls', 'Pendlay Row', 'Chin-ups'],
+      'lower-quad': ['Barbell Squat', 'Front Squat', 'Leg Press', 'Bulgarian Split Squat', 'Lunges', 'Hack Squat', 'Goblet Squat'],
+      'lower-hip': ['Conventional Deadlift', 'Romanian Deadlift', 'Sumo Deadlift', 'Hip Thrust', 'Good Mornings', 'Stiff Leg Deadlift', 'Block Pulls'],
+      'accessory': ['Dumbbell Curl', 'Tricep Pushdown', 'Lateral Raise', 'Rear Delt Fly', 'Plank', 'Hammer Curl', 'Rope Pushdown', 'Cable Curl'],
+      'core': ['Plank', 'Ab Wheel', 'Hanging Leg Raise', 'Cable Crunch', 'Russian Twist']
     },
     bodybuilding: {
-      'chest': ['Barbell Bench Press', 'Incline Dumbbell Press', 'Cable Fly', 'Dips', 'Pec Deck'],
-      'back': ['Pull-ups', 'Barbell Row', 'Lat Pulldown', 'Cable Row', 'Dumbbell Row'],
-      'shoulders': ['Overhead Press', 'Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Face Pulls'],
-      'legs': ['Barbell Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curl', 'Leg Extension', 'Calf Raise'],
-      'arms': ['Barbell Curl', 'Tricep Pushdown', 'Hammer Curl', 'Skull Crushers', 'Cable Curl']
+      'chest': ['Barbell Bench Press', 'Incline Dumbbell Press', 'Cable Fly', 'Dips', 'Pec Deck', 'Decline Press', 'Incline Fly'],
+      'back': ['Pull-ups', 'Barbell Row', 'Lat Pulldown', 'Cable Row', 'Dumbbell Row', 'T-Bar Row', 'Straight Arm Pulldown'],
+      'shoulders': ['Overhead Press', 'Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Face Pulls', 'Arnold Press', 'Cable Lateral Raise'],
+      'legs': ['Barbell Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curl', 'Leg Extension', 'Calf Raise', 'Walking Lunges', 'Sissy Squat'],
+      'arms': ['Barbell Curl', 'Tricep Pushdown', 'Hammer Curl', 'Skull Crushers', 'Cable Curl', 'Preacher Curl', 'Overhead Tricep Extension'],
+      'core': ['Cable Crunch', 'Hanging Leg Raise', 'Decline Sit-ups', 'Ab Wheel', 'Plank']
     },
     'general-fitness': {
-      'upper': ['Push-ups', 'Dumbbell Press', 'Dumbbell Row', 'Lat Pulldown', 'Shoulder Press'],
-      'lower': ['Goblet Squat', 'Romanian Deadlift', 'Lunges', 'Leg Press', 'Calf Raise'],
-      'core': ['Plank', 'Dead Bug', 'Russian Twist', 'Bird Dog', 'Ab Wheel'],
-      'full': ['Kettlebell Swing', 'Dumbbell Clean', 'Burpees', 'Mountain Climbers', 'Box Jumps']
+      'upper': ['Push-ups', 'Dumbbell Press', 'Dumbbell Row', 'Lat Pulldown', 'Shoulder Press', 'Cable Fly', 'Face Pulls'],
+      'upper-push': ['Push-ups', 'Dumbbell Press', 'Shoulder Press', 'Incline Press', 'Dips', 'Cable Fly'],
+      'upper-pull': ['Dumbbell Row', 'Lat Pulldown', 'Cable Row', 'Face Pulls', 'Pull-ups', 'Rear Delt Fly'],
+      'lower': ['Goblet Squat', 'Romanian Deadlift', 'Lunges', 'Leg Press', 'Calf Raise', 'Step-ups', 'Hip Thrust'],
+      'core': ['Plank', 'Dead Bug', 'Russian Twist', 'Bird Dog', 'Ab Wheel', 'Mountain Climbers'],
+      'full': ['Kettlebell Swing', 'Dumbbell Clean', 'Burpees', 'Mountain Climbers', 'Box Jumps', 'Thrusters'],
+      'accessory': ['Dumbbell Curl', 'Tricep Pushdown', 'Lateral Raise', 'Rear Delt Fly', 'Plank', 'Calf Raise']
     }
   };
 
@@ -318,58 +331,126 @@ function buildDayExercises(focus, exerciseBank, experienceLevel, isDeload) {
   const rpeBase = isDeload ? 6 : 8;
   const setsMultiplier = isDeload ? 0.6 : 1;
 
-  // Exercise count based on experience
-  const exerciseCounts = {
-    'complete-beginner': 4,
-    'beginner': 5,
-    'intermediate': 6,
-    'advanced': 7,
-    'elite': 8
-  };
-  const targetCount = exerciseCounts[experienceLevel] || 6;
-
-  // Determine which exercise categories to use based on focus
+  // ═══════════════════════════════════════════════════════════
+  // 1. WARMUPS - Always first (get the body ready)
+  // ═══════════════════════════════════════════════════════════
   const focusLower = focus.toLowerCase();
-  let categories = [];
 
-  if (focusLower.includes('squat') || focusLower.includes('quad') || focusLower.includes('legs') || focusLower.includes('lower')) {
-    categories = ['lower-quad', 'lower-hip', 'legs', 'lower'];
-  } else if (focusLower.includes('bench') || focusLower.includes('push') || focusLower.includes('chest')) {
-    categories = ['upper-push', 'chest', 'upper', 'shoulders'];
-  } else if (focusLower.includes('deadlift') || focusLower.includes('pull') || focusLower.includes('back')) {
-    categories = ['lower-hip', 'upper-pull', 'back', 'upper'];
-  } else if (focusLower.includes('upper')) {
-    categories = ['upper-push', 'upper-pull', 'upper', 'shoulders', 'arms'];
-  } else if (focusLower.includes('full')) {
-    categories = ['upper', 'lower', 'full', 'core'];
-  } else if (focusLower.includes('shoulder') || focusLower.includes('arm')) {
-    categories = ['shoulders', 'arms', 'upper-push', 'accessory'];
+  // Select warmups based on workout focus
+  let warmups = [];
+  if (focusLower.includes('lower') || focusLower.includes('leg') || focusLower.includes('squat') || focusLower.includes('deadlift')) {
+    warmups = [
+      { name: 'Leg Swings', sets: 2, reps: '10 each leg', category: 'warmup', notes: 'Front-to-back and side-to-side' },
+      { name: 'Bodyweight Squats', sets: 2, reps: '10', category: 'warmup', notes: 'Slow and controlled' },
+      { name: 'Hip Circles', sets: 2, reps: '10 each direction', category: 'warmup', notes: 'Open up the hips' }
+    ];
+  } else if (focusLower.includes('upper') || focusLower.includes('push') || focusLower.includes('bench') || focusLower.includes('chest')) {
+    warmups = [
+      { name: 'Arm Circles', sets: 2, reps: '10 each direction', category: 'warmup', notes: 'Small to large circles' },
+      { name: 'Band Pull-Aparts', sets: 2, reps: '15', category: 'warmup', notes: 'Activate rear delts' },
+      { name: 'Push-up Plus', sets: 2, reps: '10', category: 'warmup', notes: 'Protract shoulders at top' }
+    ];
+  } else if (focusLower.includes('pull') || focusLower.includes('back')) {
+    warmups = [
+      { name: 'Cat-Cow Stretch', sets: 2, reps: '10', category: 'warmup', notes: 'Mobilize the spine' },
+      { name: 'Band Pull-Aparts', sets: 2, reps: '15', category: 'warmup', notes: 'Activate rear delts' },
+      { name: 'Scapular Pull-ups', sets: 2, reps: '10', category: 'warmup', notes: 'Engage lats' }
+    ];
+  } else {
+    // Full body / general warmup
+    warmups = [
+      { name: 'Jumping Jacks', sets: 2, reps: '20', category: 'warmup', notes: 'Get heart rate up' },
+      { name: 'World\'s Greatest Stretch', sets: 2, reps: '5 each side', category: 'warmup', notes: 'Full body mobility' },
+      { name: 'Inchworms', sets: 2, reps: '8', category: 'warmup', notes: 'Hamstrings and core activation' }
+    ];
   }
 
-  // Add accessory category
-  categories.push('accessory');
+  // Add warmups to exercises array
+  exercises.push(...warmups);
 
-  // Collect exercises from relevant categories
-  let availableExercises = [];
-  categories.forEach(cat => {
+  // ═══════════════════════════════════════════════════════════
+  // 2. PRIMARY LIFTS - Main compound movements (1-2 exercises)
+  // ═══════════════════════════════════════════════════════════
+  let primaryCategories = [];
+  if (focusLower.includes('squat') || focusLower.includes('quad') || focusLower.includes('legs') || focusLower.includes('lower')) {
+    primaryCategories = ['lower-quad', 'lower-hip', 'legs', 'lower'];
+  } else if (focusLower.includes('bench') || focusLower.includes('push') || focusLower.includes('chest')) {
+    primaryCategories = ['upper-push', 'chest'];
+  } else if (focusLower.includes('deadlift') || focusLower.includes('pull') || focusLower.includes('back')) {
+    primaryCategories = ['lower-hip', 'upper-pull', 'back'];
+  } else if (focusLower.includes('upper')) {
+    primaryCategories = ['upper-push', 'upper-pull'];
+  } else if (focusLower.includes('full')) {
+    primaryCategories = ['upper', 'lower', 'full'];
+  } else if (focusLower.includes('shoulder') || focusLower.includes('arm')) {
+    primaryCategories = ['shoulders', 'upper-push'];
+  }
+
+  // Collect primary exercises
+  let primaryExercises = [];
+  primaryCategories.forEach(cat => {
     if (exerciseBank[cat]) {
-      availableExercises = availableExercises.concat(exerciseBank[cat]);
+      primaryExercises = primaryExercises.concat(exerciseBank[cat]);
+    }
+  });
+  primaryExercises = [...new Set(primaryExercises)];
+
+  // Add 1-2 primary lifts
+  const primaryCount = 2;
+  for (let i = 0; i < Math.min(primaryCount, primaryExercises.length); i++) {
+    exercises.push({
+      name: primaryExercises[i],
+      category: 'primary',
+      sets: Math.round(4 * setsMultiplier),
+      reps: '5-6',
+      rpe: rpeBase,
+      rest: '3-4 min',
+      notes: 'Focus on form and control'
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 3. ACCESSORIES - Supporting movements (3-5 exercises)
+  // ═══════════════════════════════════════════════════════════
+  const exerciseCounts = {
+    'complete-beginner': 2,
+    'beginner': 3,
+    'intermediate': 4,
+    'advanced': 5,
+    'elite': 6
+  };
+  const accessoryCount = exerciseCounts[experienceLevel] || 4;
+
+  // Get accessory exercises (different from primaries)
+  let accessoryCategories = ['accessory'];
+  if (focusLower.includes('lower') || focusLower.includes('leg')) {
+    accessoryCategories = ['lower-quad', 'lower-hip', 'legs', 'lower', 'core', 'accessory'];
+  } else if (focusLower.includes('upper') || focusLower.includes('push') || focusLower.includes('pull')) {
+    accessoryCategories = ['upper-push', 'upper-pull', 'shoulders', 'arms', 'accessory'];
+  } else {
+    accessoryCategories = ['upper', 'lower', 'core', 'accessory'];
+  }
+
+  let accessoryExercises = [];
+  accessoryCategories.forEach(cat => {
+    if (exerciseBank[cat]) {
+      accessoryExercises = accessoryExercises.concat(exerciseBank[cat]);
     }
   });
 
-  // Remove duplicates
-  availableExercises = [...new Set(availableExercises)];
+  // Remove duplicates and already-used primaries
+  const usedNames = primaryExercises.slice(0, primaryCount);
+  accessoryExercises = [...new Set(accessoryExercises)].filter(e => !usedNames.includes(e));
 
-  // Pick exercises up to target count
-  for (let i = 0; i < Math.min(targetCount, availableExercises.length); i++) {
-    const isMainLift = i < 2;
+  for (let i = 0; i < Math.min(accessoryCount, accessoryExercises.length); i++) {
     exercises.push({
-      name: availableExercises[i],
-      category: isMainLift ? 'main-lift' : 'accessory',
-      sets: Math.round((isMainLift ? 4 : 3) * setsMultiplier),
-      reps: isMainLift ? '5-6' : '8-12',
-      rpe: isMainLift ? rpeBase : rpeBase - 1,
-      rest: isMainLift ? '3-4 min' : '90 sec'
+      name: accessoryExercises[i],
+      category: 'accessory',
+      sets: Math.round(3 * setsMultiplier),
+      reps: '8-12',
+      rpe: rpeBase - 1,
+      rest: '90 sec',
+      notes: 'Control the weight'
     });
   }
 
