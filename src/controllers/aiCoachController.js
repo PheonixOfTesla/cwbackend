@@ -82,6 +82,39 @@ function shouldBypassSubscription() {
 // GET MY AI COACH
 // ============================================
 exports.getMyAICoach = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get or create AI Coach for this user
+    const aiCoach = await AICoach.getOrCreateForUser(userId);
+
+    res.json({
+      success: true,
+      aiCoach: {
+        communicationStyle: aiCoach.communicationStyle,
+        trainingPhilosophy: aiCoach.trainingPhilosophy,
+        preferences: aiCoach.preferences,
+        trainingHistory: aiCoach.trainingHistory,
+        performanceMetrics: aiCoach.performanceMetrics,
+        currentProgram: aiCoach.currentProgram,
+        aiStats: {
+          totalQueries: aiCoach.aiStats.totalQueries,
+          queriesThisMonth: aiCoach.aiStats.queriesThisMonth,
+          averageSatisfaction: aiCoach.aiStats.averageSatisfaction
+        },
+        recentLearnings: aiCoach.learnings.slice(-5)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get AI Coach error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get AI Coach',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
 
 // ============================================
 // UPDATE AI COACH PREFERENCES
