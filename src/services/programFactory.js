@@ -296,210 +296,68 @@ function buildForgePrompt(user, context) {
   const fat = Math.round((tdee * 0.30) / 9);
   const carbs = Math.round((tdee - (protein * 4) - (fat * 9)) / 4);
 
-  return `You are FORGE - the elite AI coach for ClockWork. Your job is to analyze this user's complete data and generate a structured, persistent training program.
+  return `OBJECTIVE: Act as the CLOCKWORK CONFIGURATION ENGINE. 
+TASK: Map USER CONTEXT into PROGRAM SLOTS. 
+OUTPUT: Valid JSON ONLY.
 
 ═══════════════════════════════════════════════════════════
-USER PROFILE: ${user.name}
+USER CONTEXT (DATA TO MAP)
 ═══════════════════════════════════════════════════════════
-EXPERIENCE:
-- Level: ${experienceLevel}
-- Years Training: ${experienceData.yearsTraining || 1}
-- Primary Discipline: ${experienceData.primaryDiscipline || 'general-fitness'}
-
-GOALS:
-- Primary Goal: ${goal}
-- Target Weight: ${bodyCompData.targetWeight || 'maintain'}
-- Current Weight: ${user.profile?.currentWeight || 'not specified'}
-- Timeline: ${user.primaryGoal?.targetDate ? new Date(user.primaryGoal.targetDate).toLocaleDateString() : 'flexible'}
-
-TRAINING SCHEDULE:
-- Days per Week: ${daysPerWeek}
-- Preferred Days: ${user.schedule?.preferredDays?.join(', ') || 'flexible'}
-- Session Duration: ${user.schedule?.sessionDuration || 60} minutes
-
-EQUIPMENT:
-- Location: ${equipmentData.trainingLocation || 'commercial gym'}
-- Available: ${equipmentData.availableEquipment?.join(', ') || 'full commercial gym'}
-- Limitations: ${equipmentData.limitations || 'none'}
-
-EXERCISE PREFERENCES:
-- FAVORITE exercises: ${exercisePrefs.favoriteExercises?.join(', ') || 'any compound movements'}
-- HATED exercises (NEVER include): ${exercisePrefs.hatedExercises?.join(', ') || 'none'}
-- Preferred Split: ${exercisePrefs.preferredSplit || 'upper/lower'}
-- Training Style: ${exercisePrefs.trainingStyle || 'balanced'}
-- Cardio Preference: ${exercisePrefs.cardioPreference || 'minimal'}
-
-LIFESTYLE:
-- Stress Level: ${lifestyleData.stressLevel || 'moderate'}
-- Sleep Hours: ${lifestyleData.sleepHours || 7}
-- Sleep Quality: ${lifestyleData.sleepQuality || 'good'}
-- Job Type: ${lifestyleData.jobType || 'moderate'}
-
-INJURY HISTORY:
-${user.limitations?.injuries && user.limitations.injuries.length > 0
-  ? user.limitations.injuries.map(i => `- ${i.bodyPart}: ${i.description}`).join('\n')
-  : '- No known injuries'}
-
-${competitionData.isCompeting ? `
-═══════════════════════════════════════════════════════════
-COMPETITION PREP (CRITICAL)
-═══════════════════════════════════════════════════════════
-- Sport: ${competitionData.sport || 'powerlifting'}
-- Meet Date: ${competitionData.meetDate ? new Date(competitionData.meetDate).toLocaleDateString() : 'not specified'}
-- Federation: ${competitionData.federation || 'not specified'}
-- Weight Class: ${competitionData.targetWeightClass || 'current weight'}
-` : ''}
+- Name: ${user.name}
+- Goal: ${goal}
+- Experience: ${experienceLevel}
+- Schedule: ${daysPerWeek} days/week
+- Equipment: ${equipmentData.availableEquipment?.join(', ') || 'commercial gym'}
+- Favorites: ${exercisePrefs.favoriteExercises?.join(', ') || 'Compound lifts'}
+- Hated: ${exercisePrefs.hatedExercises?.join(', ') || 'None'}
+- Injuries: ${user.limitations?.injuries?.map(i => i.bodyPart).join(', ') || 'None'}
 
 ═══════════════════════════════════════════════════════════
-CRITICAL: COMPREHENSIVE WORKOUT STRUCTURE REQUIREMENTS
+SLOT 1: NUTRITION (CALCULATED VALUES)
 ═══════════════════════════════════════════════════════════
-
-EVERY SINGLE TRAINING DAY MUST FOLLOW THIS EXACT STRUCTURE:
-
-1. **ACTIVE WARMUP** (5-10 minutes total):
-   - Category: "warmup"
-   - Include 2-3 mobility exercises appropriate for the day's focus
-   - Examples: "Hip Circles: 2 sets × 10 reps", "Arm Circles: 2 sets × 10 reps"
-
-2. **WARMUP SETS** (Build up to working weight):
-   - Category: "warmup"
-   - Include 2-3 ramp-up sets for the main lift
-
-3. **MAIN LIFTS** (Heavy compound movements):
-   - Category: "main-lift"
-   - Include 2-4 primary compound exercises per day
-   - MUST include: sets, reps, rest period, RPE, percentageOfMax (relative to 1RM)
-   - Example: "Barbell Squat: 5 sets × 3 reps @ RPE 8 (85% 1RM) - 3-5 min rest"
-
-4. **ACCESSORY EXERCISES** (Supporting movements):
-   - Category: "accessory"
-   - Include 4-6 accessory exercises per day
-   - Target muscles that support main lifts
-
-5. **COOLDOWN/STRETCHING** (5-10 minutes):
-   - Category: "cooldown"
-   - Static stretching targeting muscles worked
-
-TOTAL EXERCISES PER WORKOUT: 12-18 exercises minimum
+- Daily Calories: ${tdee}
+- Macros: Protein ${protein}g, Carbs ${carbs}g, Fat ${fat}g
+- Requirement: 5 meals (breakfast, snack1, lunch, snack2, dinner)
 
 ═══════════════════════════════════════════════════════════
-NUTRITION PLAN REQUIREMENTS
+SLOT 2: HABITS (SUPPORT SYSTEM)
 ═══════════════════════════════════════════════════════════
+- Requirement: 3-5 daily habits (e.g., Morning Mobility, Protein Goal, Sleep)
 
-Generate a COMPLETE meal plan with nutritionPlan.mealPlan containing:
+═══════════════════════════════════════════════════════════
+SLOT 3: WORKOUTS (8-WEEK PROGRESSION)
+═══════════════════════════════════════════════════════════
+- Every workout must have:
+  1. warmup (2-3 exercises)
+  2. main-lift (2-4 exercises with RPE and %Max)
+  3. accessory (4-6 exercises)
+  4. cooldown (1-2 exercises)
+- Total exercises per workout: 12-18
+
+═══════════════════════════════════════════════════════════
+JSON SCHEMA (STRICT ENFORCEMENT)
+═══════════════════════════════════════════════════════════
 {
-  "breakfast": { "name": "...", "description": "...", "calories": 600, "protein": 40, "carbs": 60, "fat": 15, "ingredients": ["..."], "prepTime": 15 },
-  "snack1": { ... },
-  "lunch": { ... },
-  "snack2": { ... },
-  "dinner": { ... }
-}
-
-═══════════════════════════════════════════════════════════
-HABIT PLAN REQUIREMENTS
-═══════════════════════════════════════════════════════════
-
-Generate a list of 3-5 daily habits to support this program.
-{
-  "habitPlan": [
-    {
-      "name": "Morning Mobility",
-      "description": "5 mins of flow",
-      "category": "recovery",
-      "frequency": "daily",
-      "trackingType": "boolean"
-    },
-    ...
-  ]
-}
-
-═══════════════════════════════════════════════════════════
-YOUR TASK: Generate a structured program in JSON format
-═══════════════════════════════════════════════════════════
-
-Return ONLY valid JSON (no markdown, no explanations). Use this exact structure:
-
-{
-  "name": "Descriptive program name",
+  "name": "Program Name",
   "durationWeeks": 8,
-  "periodization": {
-    "model": "linear|block|undulating",
-    "phases": [
-      {
-        "name": "accumulation|strength|intensity|peak|deload",
-        "startWeek": 1,
-        "endWeek": 3,
-        "volumeLevel": "moderate",
-        "intensityRange": [70, 85],
-        "rpeTarget": 6,
-        "deloadWeek": false
-      }
-    ]
-  },
-  "nutritionPlan": {
-    "calorieTarget": ${tdee},
-    "macros": {
-      "protein": ${protein},
-      "carbs": ${carbs},
-      "fat": ${fat}
-    },
-    "mealPlan": { ... (as defined above) ... }
-  },
-  "habitPlan": [
-    {
-       "name": "string",
-       "description": "string",
-       "category": "training|nutrition|recovery|mindset",
-       "frequency": "daily|weekdays",
-       "trackingType": "boolean|quantity",
-       "targetValue": 1,
-       "unit": "string"
-    }
-  ],
+  "periodization": { "model": "linear", "phases": [...] },
+  "nutritionPlan": { "calorieTarget": ${tdee}, "macros": {...}, "mealPlan": {...} },
+  "habitPlan": [ { "name": "...", "frequency": "daily", "trackingType": "boolean" } ],
   "weeklyTemplates": [
     {
       "weekNumber": 1,
       "trainingDays": [
         {
           "dayOfWeek": "monday",
-          "title": "Heavy Squat Day",
-          "focus": "squat",
-          "duration": 75,
           "exercises": [
-            {
-              "name": "Hip Circles",
-              "category": "warmup",
-              "sets": 2,
-              "reps": "10 each direction",
-              "rest": "0 sec",
-              "notes": "Mobility prep"
-            },
-            {
-              "name": "Barbell Squat",
-              "category": "main-lift",
-              "sets": 5,
-              "reps": "3",
-              "rest": "3-5 min",
-              "rpe": 8,
-              "percentageOfMax": 85,
-              "notes": "Main lift"
-            }
-            ... (ensure 12-18 exercises total)
+            { "name": "...", "category": "warmup|main-lift|accessory|cooldown", "sets": 3, "reps": "10", "rpe": 8 }
           ]
         }
-      ],
-      "restDays": ["wednesday", "sunday"],
-      "deloadWeek": false
+      ]
     }
   ]
 }
 
-CRITICAL VALIDATION RULES:
-1. durationWeeks MUST be 4-12
-2. EVERY trainingDay MUST have 12-18 exercises total
-3. EVERY trainingDay MUST have exercises in ALL categories: warmup, main-lift, accessory, cooldown
-4. EVERY main-lift exercise MUST have rpe and percentageOfMax specified
-5. nutritionPlan MUST include mealPlan with ALL 5 meals: breakfast, snack1, lunch, snack2, dinner
-6. habitPlan MUST include 3-5 high-impact habits
-7. Generate ${daysPerWeek} training days per week`;
+FINAL RULE: Zero explanation text. Fill the slots.`;
+}`;
 }

@@ -746,20 +746,37 @@ ${conversationHistory.map(msg => `${msg.role === 'user' ? 'USER' : 'FORGE'}: ${m
     let programContext = '';
     if (hasActiveProgram) {
       const currentPhase = activeProgram.calculateCurrentPhase();
+      
+      // FETCH TODAY'S SLOTS (Workouts/Meals)
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayEvents = await CalendarEvent.find({
+        userId,
+        date: { $gte: today, $lt: tomorrow }
+      }).lean();
+
+      const todayWorkout = todayEvents.find(e => e.type === 'workout');
+      const todayMeals = todayEvents.filter(e => e.type === 'nutrition');
+
       programContext = `
 
 ═══════════════════════════════════════════════════════════
 ACTIVE PROGRAM: "${activeProgram.name}"
 ═══════════════════════════════════════════════════════════
-- Duration: ${activeProgram.durationWeeks} weeks
-- Current Week: ${activeProgram.currentWeek} (${activeProgram.percentComplete}% complete)
-- Weeks Remaining: ${activeProgram.weeksRemaining}
-- Current Phase: ${currentPhase?.name || 'unknown'}
+- Progress: Week ${activeProgram.currentWeek} of ${activeProgram.durationWeeks} (${activeProgram.percentComplete}% complete)
 - Goal: ${activeProgram.goal}
-- Periodization Model: ${activeProgram.periodization?.model}
-${activeProgram.competitionPrep?.competitionDate ? `- Competition Date: ${new Date(activeProgram.competitionPrep.competitionDate).toLocaleDateString()}` : ''}
+- Current Phase: ${currentPhase?.name || 'standard'}
 
-When answering the user, remember they are CURRENTLY IN THIS PROGRAM. Your coaching should reference their program context, help them execute it effectively, and suggest adjustments only if absolutely necessary.`;
+TODAY'S SCHEDULED SLOTS:
+${todayWorkout ? `🏋️ WORKOUT: "${todayWorkout.title}"
+   Exercises: ${todayWorkout.exercises?.map(ex => `${ex.name} (${ex.sets}x${ex.reps})`).join(', ') || 'Rest Day'}` : '🏋️ WORKOUT: Rest Day'}
+
+${todayMeals.length > 0 ? `🍎 MEALS: ${todayMeals.map(m => m.title).join(', ')}` : '🍎 MEALS: Flexible nutrition day'}
+
+When answering the user, reference their specific exercises or meals if relevant. Be the coach who actually knows what they're doing today.`;
     } else {
       programContext = `
 
