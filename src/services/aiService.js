@@ -23,7 +23,7 @@ const openrouter = new OpenAI({
 const AI_PROVIDERS = [
   {
     name: 'Claude Haiku',
-    model: 'claude-3-5-haiku-20241022',  // $0.25/1M input, $1.25/1M output - fast & reliable
+    model: 'claude-3-5-haiku-latest',  // $0.25/1M input, $1.25/1M output - fast & reliable
     client: anthropic,
     timeout: 30000,
     isLocal: false,
