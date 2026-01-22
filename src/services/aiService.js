@@ -11,9 +11,8 @@ const openai = new OpenAI({
 
 // Cheapest AI providers on OpenRouter (user has credits, not using free tier)
 const AI_PROVIDERS = [
-  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct', cost: 0.00018 }, // $0.18 per 1M tokens
-  { name: 'Mistral Small', model: 'mistralai/mistral-small-2402', cost: 0.0002 }, // Updated to specific version
-  { name: 'Gemini Flash 1.5', model: 'google/gemini-flash-1.5', cost: 0.000075 } // Standard ID
+  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct', cost: 0.00018 }, // Primary: High Intelligence
+  { name: 'Llama 3.1 8B', model: 'meta-llama/llama-3.1-8b-instruct', cost: 0.00005 }   // Fallback: High Speed, Very Cheap
 ];
 
 // Configuration
