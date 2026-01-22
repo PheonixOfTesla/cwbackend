@@ -400,11 +400,33 @@ function ensureValidStructure(data, context) {
     data.periodization = {
       model: 'linear',
       phases: [
-        { name: 'accumulation', weeks: [1, 2, 3, 4] },
-        { name: 'intensity', weeks: [5, 6, 7] },
-        { name: 'deload', weeks: [8] }
+        { name: "accumulation", startWeek: 1, endWeek: 4 },
+        { name: "intensity", startWeek: 5, endWeek: 7 },
+        { name: "deload", startWeek: 8, endWeek: 8 }
       ]
     };
+  }
+
+  // Normalize phases (Fix AI schema mismatches)
+  if (data.periodization.phases && Array.isArray(data.periodization.phases)) {
+    data.periodization.phases = data.periodization.phases.map(p => {
+      // Fix weeks array -> start/end
+      if (p.weeks && Array.isArray(p.weeks) && p.weeks.length > 0) {
+        p.startWeek = Math.min(...p.weeks);
+        p.endWeek = Math.max(...p.weeks);
+      }
+      
+      // Ensure required fields
+      if (!p.startWeek) p.startWeek = 1;
+      if (!p.endWeek) p.endWeek = 1;
+
+      // Fix intensityRange (must be [min, max] numbers)
+      if (!p.intensityRange || !Array.isArray(p.intensityRange) || p.intensityRange.length !== 2) {
+        p.intensityRange = [70, 80]; // Default safe range
+      }
+
+      return p;
+    });
   }
 
   // Ensure nutrition plan
