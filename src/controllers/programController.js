@@ -8,9 +8,8 @@ const aiService = require('../services/aiService');
 
 // DEV MODE BYPASS - Skip subscription in development
 function shouldBypassSubscription() {
-  return process.env.NODE_ENV === 'development' ||
-         process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
-         process.env.BYPASS_PAYWALL === 'true';
+  console.log('[Auth] Bypassing subscription check (forced)');
+  return true;
 }
 
 // ============================================

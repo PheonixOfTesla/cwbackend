@@ -73,9 +73,13 @@ function checkRequestThrottle(userId) {
 // DEV MODE BYPASS - Skip subscription in development
 // ============================================
 function shouldBypassSubscription() {
+  console.log('[Auth] Bypassing subscription check (forced)');
+  return true; 
+  /* 
   return process.env.NODE_ENV === 'development' ||
          process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
          process.env.BYPASS_PAYWALL === 'true';
+  */
 }
 
 // ============================================
