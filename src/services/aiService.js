@@ -1,58 +1,41 @@
 // Src/services/aiService.js - Bulletproof AI Service
-// Priority: Kimi K2 (free, 32k) → Ollama (local) → Llama → Fallback
+// Priority: Claude Haiku (fast, reliable) → DeepSeek V3 (cheap backup)
 
 const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
 
 // ═══════════════════════════════════════════════════════════
 // PROVIDER CONFIGURATION
 // ═══════════════════════════════════════════════════════════
 
-// OpenRouter client (Kimi K2 FREE + Llama backup)
+// Anthropic client (Claude Haiku - PRIMARY)
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+// OpenRouter client (DeepSeek fallback)
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY || 'dummy'
 });
 
-// Ollama client (local fallback)
-const ollama = new OpenAI({
-  baseURL: process.env.OLLAMA_URL || 'http://localhost:11434/v1',
-  apiKey: 'ollama'
-});
-
-// Provider chain - Kimi K2 FREE first, then paid K2 mirrors, then other fallbacks
-// OpenRouter will auto-fallback via header: moonshot → deepinfra → together
+// Provider chain - Claude Haiku first (fast, reliable), DeepSeek as backup
 const AI_PROVIDERS = [
   {
-    name: 'Kimi K2 Free',
-    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M (50/day, 1000/day with $5)
-    client: openrouter,
-    timeout: 90000,
+    name: 'Claude Haiku',
+    model: 'claude-3-5-haiku-20241022',  // $0.25/1M input, $1.25/1M output - fast & reliable
+    client: anthropic,
+    timeout: 30000,
     isLocal: false,
-    isFree: true
-  },
-  {
-    name: 'Kimi K2 Paid',
-    model: 'moonshotai/kimi-k2',  // PAID: $1.25/1M, unlimited, 60k RPM
-    client: openrouter,
-    timeout: 90000,
-    isLocal: false,
-    isFree: false
-  },
-  {
-    name: 'Novita K2',
-    model: 'novita/kimi-k2',  // Novita hosts K2
-    client: openrouter,
-    timeout: 90000,
-    isLocal: false,
-    isFree: false
+    isAnthropic: true
   },
   {
     name: 'DeepSeek V3',
-    model: 'deepseek/deepseek-chat',  // $0.27/1M - very cheap non-K2 backup
+    model: 'deepseek/deepseek-chat',  // $0.27/1M - cheap backup via OpenRouter
     client: openrouter,
-    timeout: 90000,
+    timeout: 30000,
     isLocal: false,
-    isFree: false
+    isAnthropic: false
   }
 ];
 
@@ -75,9 +58,13 @@ async function generateAIContent(prompt, systemPrompt = null, maxTokens = 2048) 
   for (let i = 0; i < AI_PROVIDERS.length; i++) {
     const provider = AI_PROVIDERS[i];
 
-    // Skip OpenRouter if no API key
-    if (!provider.isLocal && !process.env.OPENROUTER_API_KEY) {
-      console.log(`[AI Service] Skipping ${provider.name} - no API key`);
+    // Skip if no API key for this provider
+    if (provider.isAnthropic && !process.env.ANTHROPIC_API_KEY) {
+      console.log(`[AI Service] Skipping ${provider.name} - no ANTHROPIC_API_KEY`);
+      continue;
+    }
+    if (!provider.isAnthropic && !provider.isLocal && !process.env.OPENROUTER_API_KEY) {
+      console.log(`[AI Service] Skipping ${provider.name} - no OPENROUTER_API_KEY`);
       continue;
     }
 
@@ -112,35 +99,49 @@ async function generateAIContent(prompt, systemPrompt = null, maxTokens = 2048) 
  * Call a single provider with timeout and proper headers
  */
 async function callProvider(provider, prompt, systemPrompt, maxTokens) {
+  // Create timeout promise
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout after ${provider.timeout}ms`)), provider.timeout);
+  });
+
+  // Handle Anthropic API (different format)
+  if (provider.isAnthropic) {
+    const requestOptions = {
+      model: provider.model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }]
+    };
+
+    if (systemPrompt) {
+      requestOptions.system = systemPrompt;
+    }
+
+    const completion = await Promise.race([
+      provider.client.messages.create(requestOptions),
+      timeoutPromise
+    ]);
+
+    return completion.content[0].text;
+  }
+
+  // Handle OpenAI-compatible API (OpenRouter/DeepSeek)
   const messages = [];
   if (systemPrompt) {
     messages.push({ role: 'system', content: systemPrompt });
   }
   messages.push({ role: 'user', content: prompt });
 
-  // Create timeout promise
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`Timeout after ${provider.timeout}ms`)), provider.timeout);
-  });
-
-  // Build request options with OpenRouter headers
   const requestOptions = {
     model: provider.model,
     max_tokens: maxTokens,
     messages: messages,
     temperature: 0.7,
-    // OpenRouter-specific headers (passed via extra_body)
     extra_headers: {
       'HTTP-Referer': 'https://clockwork.fit',
-      'X-Title': 'ClockWork Fitness',
-      // Provider fallback: moonshot → novita → nvidia (valid K2 hosts)
-      'openrouter-provider': JSON.stringify({ order: ['moonshot', 'novita', 'nvidia'], allow_fallback: true }),
-      // Enable prompt caching (30% hit rate on repeated system prompts)
-      'cache-prompt': 'true'
+      'X-Title': 'ClockWork Fitness'
     }
   };
 
-  // Race between API call and timeout
   const completion = await Promise.race([
     provider.client.chat.completions.create(requestOptions),
     timeoutPromise
