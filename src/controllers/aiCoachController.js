@@ -723,7 +723,7 @@ exports.askCoach = async (req, res) => {
           }
         };
 
-        actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${savedProgram.durationWeeks}-week program with ${result.stats.workouts} workouts and ${result.stats.meals} meals (${result.stats.workouts + result.stats.meals} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
+        actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${savedProgram.durationWeeks}-week program with ${result.stats.workouts} workouts and ${result.stats.meals} meals (${result.stats.workouts + result.stats.meals} total events) in the user's calendar. Tell them their program is ready. Explicitly tell them to CLICK THE 'VIEW CALENDAR' BUTTON below to see their full schedule!]`;
 
       } catch (programErr) {
         console.error('[FORGE] Full program generation error:', programErr);

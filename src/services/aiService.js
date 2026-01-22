@@ -12,12 +12,12 @@ const openai = new OpenAI({
 // Cheapest AI providers on OpenRouter (user has credits, not using free tier)
 const AI_PROVIDERS = [
   { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct', cost: 0.00018 }, // $0.18 per 1M tokens
-  { name: 'Mistral Small', model: 'mistralai/mistral-small-2501', cost: 0.0002 }, // $0.20 per 1M tokens
-  { name: 'Gemini Flash', model: 'google/gemini-flash-1.5', cost: 0.000075 } // $0.075 per 1M tokens (cheapest)
+  { name: 'Mistral Small', model: 'mistralai/mistral-small-2402', cost: 0.0002 }, // Updated to specific version
+  { name: 'Gemini Flash 1.5', model: 'google/gemini-flash-1.5', cost: 0.000075 } // Standard ID
 ];
 
 // Configuration
-const AI_TIMEOUT_MS = 30000; // 30 seconds
+const AI_TIMEOUT_MS = 120000; // 120 seconds (Program generation takes time!)
 const MAX_RETRIES_PER_PROVIDER = 2; // 2 retries per provider for faster fallback
 
 /**
