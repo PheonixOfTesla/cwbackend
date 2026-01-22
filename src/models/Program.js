@@ -269,6 +269,7 @@ programSchema.methods.generateCalendarEvents = async function() {
       // Build exercises with phase-specific adjustments
       const exercises = trainingDay.exercises.map(ex => ({
         name: ex.name,
+        category: ex.category || 'accessory',
         sets: ex.sets,
         reps: ex.reps,
         rest: ex.rest,
@@ -280,7 +281,7 @@ programSchema.methods.generateCalendarEvents = async function() {
       events.push({
         userId: this.userId,
         type: 'workout',
-        title: trainingDay.title,
+        title: trainingDay.focus || trainingDay.title || trainingDay.dayOfWeek,
         date: eventDate,
         startTime: '09:00',  // Default start time
         duration: trainingDay.duration || 60,

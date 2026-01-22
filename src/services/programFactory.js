@@ -573,7 +573,19 @@ function ensureValidStructure(data, context) {
 // ═══════════════════════════════════════════════════════════
 
 async function saveAndPropagate(user, data, source, aiGenerated) {
-  // A. Create Program document
+  // A. CLEANUP: Delete old workout and nutrition events from future dates
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const deleteResult = await CalendarEvent.deleteMany({
+    userId: user._id,
+    date: { $gte: today },
+    type: { $in: ['workout', 'nutrition'] },
+    aiGenerated: true
+  });
+  console.log(`[ProgramFactory] Cleaned up ${deleteResult.deletedCount} old AI-generated events`);
+
+  // B. Create Program document
   const program = new Program({
     userId: user._id,
     name: data.name || 'FORGE Program',
@@ -592,12 +604,12 @@ async function saveAndPropagate(user, data, source, aiGenerated) {
   const savedProgram = await program.save();
   console.log(`[ProgramFactory] Program ${savedProgram._id} saved.`);
 
-  // B. Update AI Coach reference
+  // C. Update AI Coach reference
   const aiCoach = await AICoach.getOrCreateForUser(user._id);
   aiCoach.currentProgramId = savedProgram._id;
   await aiCoach.save();
 
-  // C. Generate workout calendar events
+  // D. Generate workout calendar events
   let workoutEvents = [];
   try {
     workoutEvents = await savedProgram.generateCalendarEvents();
@@ -606,13 +618,13 @@ async function saveAndPropagate(user, data, source, aiGenerated) {
     workoutEvents = await manualGenerateWorkoutEvents(user._id, savedProgram);
   }
 
-  // D. Generate meal calendar events
+  // E. Generate meal calendar events
   const mealEvents = await generateMealEvents(user._id, savedProgram, data.nutritionPlan?.mealPlan);
 
-  // E. Update nutrition targets
+  // F. Update nutrition targets
   await updateNutritionTargets(user._id, data.nutritionPlan);
 
-  // F. Generate habits
+  // G. Generate habits
   const habits = await generateHabits(user._id, data.habitPlan);
 
   return {
