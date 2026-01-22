@@ -120,19 +120,13 @@ function gatherUserContext(user) {
 function buildSimplePrompt(user, ctx) {
   return `Generate a ${ctx.daysPerWeek}-day/week ${ctx.discipline} program for ${user.name}.
 
-USER DATA:
-- Goal: ${ctx.goal}
-- Experience: ${ctx.experienceLevel}
-- Equipment: ${ctx.equipment.join(', ')}
-- Favorites: ${ctx.favoriteExercises.join(', ') || 'none'}
-- Avoid: ${ctx.hatedExercises.join(', ') || 'none'}
-- Injuries: ${ctx.injuries.map(i => i.bodyPart).join(', ') || 'none'}
-- Calories: ${ctx.tdee} (P:${ctx.protein}g C:${ctx.carbs}g F:${ctx.fat}g)
+USER: ${ctx.goal} | ${ctx.experienceLevel} | Equipment: ${ctx.equipment.join(', ')}
+${ctx.injuries.length > 0 ? `Avoid: ${ctx.injuries.map(i => i.bodyPart).join(', ')}` : ''}
 
-EXERCISE CATEGORIES (use EXACTLY these values):
-- "warmup": Active warmups to prepare the body (3 exercises)
-- "main-lift": Main compound lifts (1-2 exercises)
-- "accessory": Supporting movements (3-5 exercises)
+CRITICAL RULES:
+1. Each training day = ONE workout with ALL exercises together (warmups + main lifts + accessories)
+2. "focus" = workout name like "Upper Power", "Leg Day", "Push Day" (NOT category names!)
+3. EXACTLY ${ctx.daysPerWeek} training days per week on: ${ctx.preferredDays.join(', ')}
 
 OUTPUT JSON ONLY:
 {
@@ -161,9 +155,13 @@ OUTPUT JSON ONLY:
           "dayOfWeek": "${ctx.preferredDays[0] || 'monday'}",
           "focus": "Upper Power",
           "exercises": [
-            { "name": "Arm Circles", "category": "warmup", "sets": 2, "reps": "10 each", "notes": "Warm up shoulders" },
+            { "name": "Arm Circles", "category": "warmup", "sets": 2, "reps": "10 each" },
+            { "name": "Band Pull-Aparts", "category": "warmup", "sets": 2, "reps": "15" },
             { "name": "Bench Press", "category": "main-lift", "sets": 4, "reps": "6-8", "rpe": 8 },
-            { "name": "Incline Dumbbell Press", "category": "accessory", "sets": 3, "reps": "10-12", "rpe": 7 }
+            { "name": "Barbell Row", "category": "main-lift", "sets": 4, "reps": "6-8", "rpe": 8 },
+            { "name": "Dumbbell Press", "category": "accessory", "sets": 3, "reps": "10-12" },
+            { "name": "Lat Pulldown", "category": "accessory", "sets": 3, "reps": "10-12" },
+            { "name": "Tricep Pushdown", "category": "accessory", "sets": 3, "reps": "12-15" }
           ]
         }
       ]
