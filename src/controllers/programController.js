@@ -8,9 +8,17 @@ const aiService = require('../services/aiService');
 
 // DEV MODE BYPASS - Skip subscription in development
 function shouldBypassSubscription() {
-  console.log('[Auth] Bypassing subscription check (forced)');
-  return true;
+  return process.env.NODE_ENV === 'development' ||
+         process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
+         process.env.BYPASS_PAYWALL === 'true';
 }
+
+// ... inside generateProgram ...
+
+    // 1. Subscription Check
+    console.log(`[Auth] User: ${user.email} | Subscribed: ${user.hasActiveSubscription()} | Trial Remaining: ${user.getTrialRemainingHours().toFixed(1)}h`);
+
+    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
 
 // ============================================
 // GENERATE PROGRAM (Main FORGE Analysis)

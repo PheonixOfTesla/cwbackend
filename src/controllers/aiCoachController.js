@@ -73,14 +73,23 @@ function checkRequestThrottle(userId) {
 // DEV MODE BYPASS - Skip subscription in development
 // ============================================
 function shouldBypassSubscription() {
-  console.log('[Auth] Bypassing subscription check (forced)');
-  return true; 
-  /* 
   return process.env.NODE_ENV === 'development' ||
          process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
          process.env.BYPASS_PAYWALL === 'true';
-  */
 }
+
+// ... inside exports.generateProgram and exports.askCoach ...
+
+    const features = user.getSubscriptionFeatures();
+
+    // Check and expire trial if needed
+    await user.checkTrialExpiration();
+
+    // DEBUG LOG: Check user status
+    console.log(`[Auth] User: ${user.email} | Subscribed: ${user.hasActiveSubscription()} | Trial Remaining: ${user.getTrialRemainingHours().toFixed(1)}h`);
+
+    // Simple paywall: After 24h trial, block unless they have active subscription (or dev bypass)
+    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
 
 // ============================================
 // GET MY AI COACH
