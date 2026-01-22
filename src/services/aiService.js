@@ -19,49 +19,46 @@ const ollama = new OpenAI({
   apiKey: 'ollama'
 });
 
-// Provider chain - Kimi K2 FREE first, then paid K2, then other fallbacks
+// Provider chain - Kimi K2 FREE first, then paid K2 mirrors, then other fallbacks
+// OpenRouter will auto-fallback via header: moonshot → deepinfra → together
 const AI_PROVIDERS = [
   {
     name: 'Kimi K2 Free',
-    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M tokens, 32k context (50/day, 1000/day with $5 credit)
+    model: 'moonshotai/kimi-k2:free',  // FREE: $0/1M (50/day, 1000/day with $5)
     client: openrouter,
     timeout: 90000,
     isLocal: false,
-    isFree: true,
-    extraHeaders: {
-      'HTTP-Referer': 'https://clockwork.fit',
-      'X-Title': 'ClockWork Fitness'
-    }
+    isFree: true
   },
   {
     name: 'Kimi K2 Paid',
-    model: 'moonshotai/kimi-k2',  // PAID: $1.25/1M tokens, unlimited
+    model: 'moonshotai/kimi-k2',  // PAID: $1.25/1M, unlimited, 60k RPM
     client: openrouter,
     timeout: 90000,
     isLocal: false,
-    isFree: false,
-    extraHeaders: {
-      'HTTP-Referer': 'https://clockwork.fit',
-      'X-Title': 'ClockWork Fitness'
-    }
+    isFree: false
+  },
+  {
+    name: 'DeepInfra K2',
+    model: 'deepinfra/moonshot-k2',  // $0.40/1M - cheapest K2 mirror
+    client: openrouter,
+    timeout: 90000,
+    isLocal: false,
+    isFree: false
+  },
+  {
+    name: 'Together K2',
+    model: 'together/kimi-k2-0705',  // $0.55/1M - good latency
+    client: openrouter,
+    timeout: 90000,
+    isLocal: false,
+    isFree: false
   },
   {
     name: 'DeepSeek V3',
-    model: 'deepseek/deepseek-chat',  // $0.27/1M in, $1.10/1M out - very cheap backup
+    model: 'deepseek/deepseek-chat',  // $0.27/1M - very cheap non-K2 backup
     client: openrouter,
     timeout: 90000,
-    isLocal: false,
-    isFree: false,
-    extraHeaders: {
-      'HTTP-Referer': 'https://clockwork.fit',
-      'X-Title': 'ClockWork Fitness'
-    }
-  },
-  {
-    name: 'Llama 3.3 70B',
-    model: 'meta-llama/llama-3.3-70b-instruct',
-    client: openrouter,
-    timeout: 120000,
     isLocal: false,
     isFree: false
   }
@@ -134,24 +131,22 @@ async function callProvider(provider, prompt, systemPrompt, maxTokens) {
     setTimeout(() => reject(new Error(`Timeout after ${provider.timeout}ms`)), provider.timeout);
   });
 
-  // Build request options
+  // Build request options with OpenRouter headers
   const requestOptions = {
     model: provider.model,
     max_tokens: maxTokens,
     messages: messages,
-    temperature: 0.7
+    temperature: 0.7,
+    // OpenRouter-specific headers (passed via extra_body)
+    extra_headers: {
+      'HTTP-Referer': 'https://clockwork.fit',
+      'X-Title': 'ClockWork Fitness',
+      // Provider fallback: moonshot free → deepinfra paid → together
+      'openrouter-provider': JSON.stringify({ order: ['moonshot', 'deepinfra', 'together'], allow_fallback: true }),
+      // Enable prompt caching (30% hit rate on repeated system prompts)
+      'cache-prompt': 'true'
+    }
   };
-
-  // Add extra headers for OpenRouter (provider priority, caching)
-  if (provider.extraHeaders || !provider.isLocal) {
-    requestOptions.headers = {
-      ...provider.extraHeaders,
-      // Provider fallback order for OpenRouter
-      'openrouter-provider-order': 'moonshot,deepinfra,together',
-      // Enable prompt caching (30% fewer calls)
-      'openrouter-cache-prompt': 'true'
-    };
-  }
 
   // Race between API call and timeout
   const completion = await Promise.race([
