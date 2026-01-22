@@ -170,14 +170,23 @@ exports.generateProgram = async (req, res) => {
     // PAYWALL: After 24h trial, block unless they have active subscription
     if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
+      const trialExpired = trialHours <= 0;
       return res.status(403).json({
         success: false,
-        message: trialHours > 0
-          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
-          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
-        trialExpired: true,
+        message: trialExpired
+          ? 'Your free trial has ended. Subscribe to continue using FORGE AI coaching.'
+          : `Free trial ends in ${Math.ceil(trialHours)} hours. Subscribe for unlimited access.`,
+        trialExpired,
         requiresSubscription: true,
-        trialRemaining: trialHours
+        trialRemaining: Math.max(0, trialHours),
+        // Frontend should show subscribe modal with this data:
+        subscribePrompt: {
+          title: trialExpired ? 'Trial Ended' : 'Subscribe Now',
+          description: 'Get unlimited AI coaching, personalized programs, and nutrition plans.',
+          price: '$9.99/month',
+          buttonText: 'Subscribe',
+          subscribeUrl: '/subscribe'
+        }
       });
     }
 
@@ -407,14 +416,23 @@ exports.generateWorkout = async (req, res) => {
     // PAYWALL: After 24h trial, block unless they have active subscription
     if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
+      const trialExpired = trialHours <= 0;
       return res.status(403).json({
         success: false,
-        message: trialHours > 0
-          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
-          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
-        trialExpired: true,
+        message: trialExpired
+          ? 'Your free trial has ended. Subscribe to continue using FORGE AI coaching.'
+          : `Free trial ends in ${Math.ceil(trialHours)} hours. Subscribe for unlimited access.`,
+        trialExpired,
         requiresSubscription: true,
-        trialRemaining: trialHours
+        trialRemaining: Math.max(0, trialHours),
+        // Frontend should show subscribe modal with this data:
+        subscribePrompt: {
+          title: trialExpired ? 'Trial Ended' : 'Subscribe Now',
+          description: 'Get unlimited AI coaching, personalized programs, and nutrition plans.',
+          price: '$9.99/month',
+          buttonText: 'Subscribe',
+          subscribeUrl: '/subscribe'
+        }
       });
     }
 
@@ -666,14 +684,23 @@ exports.askCoach = async (req, res) => {
     // PAYWALL: After 24h trial, block unless they have active subscription
     if (!user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
+      const trialExpired = trialHours <= 0;
       return res.status(403).json({
         success: false,
-        message: trialHours > 0
-          ? `Free trial ends in ${trialHours} hours. Subscribe for full access.`
-          : 'Action not available. Subscribe for full access to FORGE AI coaching.',
-        trialExpired: true,
+        message: trialExpired
+          ? 'Your free trial has ended. Subscribe to continue using FORGE AI coaching.'
+          : `Free trial ends in ${Math.ceil(trialHours)} hours. Subscribe for unlimited access.`,
+        trialExpired,
         requiresSubscription: true,
-        trialRemaining: trialHours
+        trialRemaining: Math.max(0, trialHours),
+        // Frontend should show subscribe modal with this data:
+        subscribePrompt: {
+          title: trialExpired ? 'Trial Ended' : 'Subscribe Now',
+          description: 'Get unlimited AI coaching, personalized programs, and nutrition plans.',
+          price: '$9.99/month',
+          buttonText: 'Subscribe',
+          subscribeUrl: '/subscribe'
+        }
       });
     }
 
