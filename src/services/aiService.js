@@ -1,116 +1,256 @@
-// Src/services/aiService.js - Centralized AI Service with Multi-Provider Fallback
-// Provides reliable AI generation with automatic failover between free providers
+// Src/services/aiService.js - Bulletproof AI Service
+// Priority: Ollama (local) → OpenRouter → Fallback (never fails)
 
 const OpenAI = require('openai');
 
-// Initialize OpenRouter client
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
+// ═══════════════════════════════════════════════════════════
+// PROVIDER CONFIGURATION
+// ═══════════════════════════════════════════════════════════
+
+// Ollama client (local - fastest, free, no rate limits)
+const ollama = new OpenAI({
+  baseURL: process.env.OLLAMA_URL || 'http://localhost:11434/v1',
+  apiKey: 'ollama' // Ollama doesn't need a real key
 });
 
-// Cheapest AI providers on OpenRouter (user has credits, not using free tier)
+// OpenRouter client (cloud fallback)
+const openrouter = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY || 'dummy'
+});
+
+// Provider chain - Ollama first, then OpenRouter
 const AI_PROVIDERS = [
-  { name: 'Llama 3.3 70B', model: 'meta-llama/llama-3.3-70b-instruct', cost: 0.00018 }, // Primary: High Intelligence
-  { name: 'Llama 3.1 8B', model: 'meta-llama/llama-3.1-8b-instruct', cost: 0.00005 }   // Fallback: High Speed, Very Cheap
+  {
+    name: 'Ollama Local',
+    model: process.env.OLLAMA_MODEL || 'llama3.2',
+    client: ollama,
+    timeout: 60000,  // 60s for local
+    isLocal: true
+  },
+  {
+    name: 'Llama 3.3 70B',
+    model: 'meta-llama/llama-3.3-70b-instruct',
+    client: openrouter,
+    timeout: 120000,  // 120s for cloud
+    isLocal: false
+  },
+  {
+    name: 'Llama 3.1 8B',
+    model: 'meta-llama/llama-3.1-8b-instruct',
+    client: openrouter,
+    timeout: 60000,
+    isLocal: false
+  }
 ];
 
-// Configuration
-const AI_TIMEOUT_MS = 120000; // 120 seconds (Program generation takes time!)
-const MAX_RETRIES_PER_PROVIDER = 2; // 2 retries per provider for faster fallback
+// ═══════════════════════════════════════════════════════════
+// MAIN FUNCTION - NEVER FAILS
+// ═══════════════════════════════════════════════════════════
 
 /**
- * Generate AI content with automatic multi-provider fallback
+ * Generate AI content with bulletproof fallback chain
+ * Ollama → OpenRouter → Static fallback
+ *
  * @param {string} prompt - User prompt
  * @param {string} systemPrompt - System prompt (optional)
- * @param {number} maxTokens - Max tokens (default: 1024)
- * @param {number} providerIndex - Internal: current provider index
- * @param {number} retryCount - Internal: retry count for current provider
- * @returns {Promise<{text: string, source: string}>}
+ * @param {number} maxTokens - Max tokens (default: 2048)
+ * @returns {Promise<{text: string, source: string, fallback: boolean}>}
  */
-async function generateAIContent(
-  prompt,
-  systemPrompt = null,
-  maxTokens = 1024,
-  providerIndex = 0,
-  retryCount = 0
-) {
-  // If we've tried all providers, fail
-  if (providerIndex >= AI_PROVIDERS.length) {
-    console.error('[AI Service] All AI providers exhausted');
-    throw new Error('AI service temporarily unavailable - all providers are rate limited. Please try again in a few minutes.');
-  }
+async function generateAIContent(prompt, systemPrompt = null, maxTokens = 2048) {
 
-  const provider = AI_PROVIDERS[providerIndex];
+  // Try each provider in order
+  for (let i = 0; i < AI_PROVIDERS.length; i++) {
+    const provider = AI_PROVIDERS[i];
 
-  try {
-    // Log which provider we're using
-    if (retryCount === 0) {
-      console.log(`[AI Service] Attempting ${provider.name} (${provider.model})`);
+    // Skip OpenRouter if no API key
+    if (!provider.isLocal && !process.env.OPENROUTER_API_KEY) {
+      console.log(`[AI Service] Skipping ${provider.name} - no API key`);
+      continue;
     }
 
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('AI_TIMEOUT')), AI_TIMEOUT_MS);
-    });
+    try {
+      console.log(`[AI Service] Trying ${provider.name}...`);
 
-    // Build messages array
-    const messages = [];
-    if (systemPrompt) {
-      messages.push({ role: 'system', content: systemPrompt });
-    }
-    messages.push({ role: 'user', content: prompt });
+      const result = await callProvider(provider, prompt, systemPrompt, maxTokens);
 
-    // Race between API call and timeout
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: provider.model,
-        max_tokens: maxTokens,
-        messages: messages
-      }),
-      timeoutPromise
-    ]);
+      console.log(`[AI Service] ✓ Success with ${provider.name}`);
+      return {
+        text: result,
+        source: provider.name.toLowerCase().replace(/\s+/g, '-'),
+        fallback: false
+      };
 
-    console.log(`[AI Service] ✓ Success with ${provider.name} (FREE)`);
-    return {
-      text: completion.choices[0].message.content,
-      source: provider.name.toLowerCase().replace(/\s+/g, '-')
-    };
-  } catch (error) {
-    // Handle timeout
-    if (error.message === 'AI_TIMEOUT') {
-      console.error(`[AI Service] ${provider.name} timeout after 30s`);
-      // Try next provider on timeout
-      return generateAIContent(prompt, systemPrompt, maxTokens, providerIndex + 1, 0);
-    }
-
-    // Handle rate limiting (429)
-    if (error.status === 429) {
-      // Retry with exponential backoff
-      if (retryCount < MAX_RETRIES_PER_PROVIDER) {
-        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s
-        console.log(`[AI Service] ${provider.name} rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES_PER_PROVIDER} after ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return generateAIContent(prompt, systemPrompt, maxTokens, providerIndex, retryCount + 1);
-      } else {
-        // All retries exhausted for this provider, try next
-        console.log(`[AI Service] ${provider.name} rate limit exhausted. Trying next provider...`);
-        return generateAIContent(prompt, systemPrompt, maxTokens, providerIndex + 1, 0);
-      }
-    }
-
-    // Handle other errors - try next provider
-    console.error(`[AI Service] ${provider.name} error:`, error.status || error.message);
-    if (providerIndex < AI_PROVIDERS.length - 1) {
-      console.log(`[AI Service] Trying next provider...`);
-      return generateAIContent(prompt, systemPrompt, maxTokens, providerIndex + 1, 0);
-    } else {
-      throw new Error('AI service temporarily unavailable - please try again');
+    } catch (error) {
+      console.error(`[AI Service] ${provider.name} failed:`, error.message);
+      // Continue to next provider
     }
   }
+
+  // ALL PROVIDERS FAILED - Return fallback response
+  console.warn('[AI Service] All providers failed - using static fallback');
+  return {
+    text: getFallbackResponse(prompt),
+    source: 'static-fallback',
+    fallback: true
+  };
 }
+
+/**
+ * Call a single provider with timeout
+ */
+async function callProvider(provider, prompt, systemPrompt, maxTokens) {
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+  messages.push({ role: 'user', content: prompt });
+
+  // Create timeout promise
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout after ${provider.timeout}ms`)), provider.timeout);
+  });
+
+  // Race between API call and timeout
+  const completion = await Promise.race([
+    provider.client.chat.completions.create({
+      model: provider.model,
+      max_tokens: maxTokens,
+      messages: messages,
+      temperature: 0.7
+    }),
+    timeoutPromise
+  ]);
+
+  return completion.choices[0].message.content;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FALLBACK RESPONSES - WHEN ALL AI FAILS
+// ═══════════════════════════════════════════════════════════
+
+function getFallbackResponse(prompt) {
+  const promptLower = prompt.toLowerCase();
+
+  // Detect if this is a program generation request
+  if (promptLower.includes('program') || promptLower.includes('workout') || promptLower.includes('json')) {
+    return JSON.stringify(getFallbackProgram(), null, 2);
+  }
+
+  // Detect if this is a chat/advice request
+  if (promptLower.includes('sore') || promptLower.includes('recovery')) {
+    return "Rest is part of the process. If you're feeling sore, focus on light mobility work, hydration, and sleep. Tomorrow's another day to push.";
+  }
+
+  if (promptLower.includes('nutrition') || promptLower.includes('eat') || promptLower.includes('diet')) {
+    return "Keep it simple: protein at every meal, plenty of vegetables, and enough calories to support your training. Don't overcomplicate it.";
+  }
+
+  // Default coaching response
+  return "I'm here to help you train smarter. What's on your mind - workouts, nutrition, or recovery? Let's figure it out together.";
+}
+
+/**
+ * Fallback program structure when AI completely fails
+ * This ensures the user ALWAYS gets something
+ */
+function getFallbackProgram() {
+  return {
+    name: "ClockWork Foundation Program",
+    durationWeeks: 8,
+    periodization: {
+      model: "linear",
+      phases: [
+        { name: "accumulation", weeks: [1, 2, 3, 4] },
+        { name: "intensity", weeks: [5, 6, 7] },
+        { name: "deload", weeks: [8] }
+      ]
+    },
+    nutritionPlan: {
+      calorieTarget: 2500,
+      macros: { protein: 180, carbs: 280, fat: 80 },
+      mealPlan: {
+        breakfast: { name: "Power Breakfast", foods: ["Eggs", "Oatmeal", "Banana"], calories: 500 },
+        snack1: { name: "Mid-Morning Fuel", foods: ["Greek Yogurt", "Almonds"], calories: 300 },
+        lunch: { name: "Balanced Lunch", foods: ["Chicken Breast", "Rice", "Vegetables"], calories: 600 },
+        snack2: { name: "Pre-Workout", foods: ["Protein Shake", "Apple"], calories: 350 },
+        dinner: { name: "Recovery Dinner", foods: ["Salmon", "Sweet Potato", "Broccoli"], calories: 650 }
+      }
+    },
+    habitPlan: [
+      { name: "Drink 100oz Water", frequency: "daily", trackingType: "boolean" },
+      { name: "8 Hours Sleep", frequency: "daily", trackingType: "quantity", targetValue: 8 },
+      { name: "10K Steps", frequency: "daily", trackingType: "quantity", targetValue: 10000 },
+      { name: "Morning Mobility", frequency: "daily", trackingType: "boolean" }
+    ],
+    weeklyTemplates: generateFallbackWeeklyTemplates()
+  };
+}
+
+function generateFallbackWeeklyTemplates() {
+  const templates = [];
+
+  // Upper/Lower split for 4 days
+  const upperDay = {
+    exercises: [
+      { name: "Barbell Bench Press", category: "main-lift", sets: 4, reps: "6-8", rpe: 8 },
+      { name: "Barbell Row", category: "main-lift", sets: 4, reps: "6-8", rpe: 8 },
+      { name: "Overhead Press", category: "accessory", sets: 3, reps: "8-10", rpe: 7 },
+      { name: "Lat Pulldown", category: "accessory", sets: 3, reps: "10-12", rpe: 7 },
+      { name: "Dumbbell Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7 },
+      { name: "Tricep Pushdown", category: "accessory", sets: 3, reps: "12-15", rpe: 7 }
+    ]
+  };
+
+  const lowerDay = {
+    exercises: [
+      { name: "Barbell Squat", category: "main-lift", sets: 4, reps: "5-6", rpe: 8 },
+      { name: "Romanian Deadlift", category: "main-lift", sets: 4, reps: "8-10", rpe: 7 },
+      { name: "Leg Press", category: "accessory", sets: 3, reps: "10-12", rpe: 7 },
+      { name: "Leg Curl", category: "accessory", sets: 3, reps: "12-15", rpe: 7 },
+      { name: "Calf Raise", category: "accessory", sets: 4, reps: "15-20", rpe: 7 },
+      { name: "Plank", category: "cooldown", sets: 3, reps: "60 sec", rpe: 6 }
+    ]
+  };
+
+  for (let week = 1; week <= 8; week++) {
+    const isDeload = week === 4 || week === 8;
+    const rpeModifier = isDeload ? -2 : 0;
+
+    templates.push({
+      weekNumber: week,
+      deloadWeek: isDeload,
+      trainingDays: [
+        { dayOfWeek: "monday", focus: "Upper Body", ...upperDay },
+        { dayOfWeek: "tuesday", focus: "Lower Body", ...lowerDay },
+        { dayOfWeek: "thursday", focus: "Upper Body", ...upperDay },
+        { dayOfWeek: "friday", focus: "Lower Body", ...lowerDay }
+      ],
+      restDays: ["wednesday", "saturday", "sunday"]
+    });
+  }
+
+  return templates;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIMPLE CHAT FUNCTION - For quick responses
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Quick chat response - smaller token limit, faster
+ */
+async function quickChat(prompt, systemPrompt = null) {
+  return generateAIContent(prompt, systemPrompt, 512);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════
 
 module.exports = {
   generateAIContent,
+  quickChat,
+  getFallbackProgram,
   AI_PROVIDERS
 };

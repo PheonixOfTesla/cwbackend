@@ -6,6 +6,13 @@ const AICoach = require('../models/AICoach');
 const Nutrition = require('../models/Nutrition');
 const aiService = require('../services/aiService');
 
+// DEV MODE BYPASS - Skip subscription in development
+function shouldBypassSubscription() {
+  return process.env.NODE_ENV === 'development' ||
+         process.env.DEV_BYPASS_SUBSCRIPTION === 'true' ||
+         process.env.BYPASS_PAYWALL === 'true';
+}
+
 // ============================================
 // GENERATE PROGRAM (Main FORGE Analysis)
 // ============================================
@@ -16,8 +23,8 @@ exports.generateProgram = async (req, res) => {
     const user = await User.findById(userId);
     const programFactory = require('../services/programFactory');
 
-    // 1. Subscription Check
-    if (!user.hasActiveSubscription()) {
+    // 1. Subscription Check (with dev bypass)
+    if (!shouldBypassSubscription() && !user.hasActiveSubscription()) {
       const trialHours = user.getTrialRemainingHours();
       return res.status(403).json({
         success: false,

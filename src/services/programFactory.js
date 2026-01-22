@@ -1,3 +1,6 @@
+// Src/services/programFactory.js - BULLETPROOF Program Factory
+// This NEVER fails. User ALWAYS gets a program.
+
 const mongoose = require('mongoose');
 const Program = require('../models/Program');
 const CalendarEvent = require('../models/CalendarEvent');
@@ -6,181 +9,544 @@ const User = require('../models/User');
 const AICoach = require('../models/AICoach');
 const aiService = require('./aiService');
 
-// ============================================
-// SHARED PROGRAM FACTORY
-// Centralizes generation, validation, and propagation
-// to ensure "Bulletproof" consistency.
-// ============================================
+// ═══════════════════════════════════════════════════════════
+// MAIN FUNCTION - BULLETPROOF, NEVER FAILS
+// ═══════════════════════════════════════════════════════════
 
 /**
- * Core function to generate a program from user data
- * @param {string} userId 
- * @param {Object} options - { type: 'full' | 'workout', overridePrompt: string, source: 'chat' | 'ui' }
+ * Create a program for the user - GUARANTEED TO WORK
+ * 1. Tries AI generation
+ * 2. Falls back to personalized template if AI fails
+ * 3. Always saves to calendar
  */
 exports.createProgramForUser = async (userId, options = {}) => {
-  console.log(`[ProgramFactory] Starting generation for user ${userId} (Source: ${options.source || 'unknown'})`);
-  
+  console.log(`[ProgramFactory] Starting generation for user ${userId}`);
+
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
 
-  // 1. GATHER DATA (Centralized data gathering)
-  const context = await gatherUserContext(user);
-  
-  // 2. BUILD PROMPT
-  const prompt = options.overridePrompt || buildForgePrompt(user, context);
+  // 1. GATHER USER DATA (This never fails - just reads from DB)
+  const context = gatherUserContext(user);
+  console.log(`[ProgramFactory] User context: ${context.daysPerWeek} days/week, goal: ${context.goal}, TDEE: ${context.tdee}`);
 
-  // 3. CALL AI
-  // 8-week programs need massive context, using 16k tokens
-  const aiResponse = await aiService.generateAIContent(prompt, 'You are FORGE, the elite AI coach', 16384);
-  
-  // 4. PARSE & CLEAN JSON
-  const programData = parseAIResponse(aiResponse.text);
+  // 2. TRY AI GENERATION, FALL BACK TO TEMPLATE
+  let programData;
+  let aiGenerated = false;
 
-  // 5. VALIDATE STRUCTURE (The "Bulletproof" Check)
-  validateProgramStructure(programData, context.daysPerWeek);
+  try {
+    console.log('[ProgramFactory] Attempting AI generation...');
+    const prompt = buildSimplePrompt(user, context);
+    const aiResponse = await aiService.generateAIContent(prompt, 'You are FORGE. Return ONLY valid JSON.', 8192);
 
-  // 6. SAVE TO DB & PROPAGATE (Transactional if possible, but sequential for now)
-  const savedProgram = await saveAndPropagate(user, programData, options.source);
+    if (aiResponse.fallback) {
+      // AI service returned its own fallback
+      console.log('[ProgramFactory] Using AI service fallback');
+      programData = JSON.parse(aiResponse.text);
+    } else {
+      // Parse AI response
+      programData = parseAIResponse(aiResponse.text);
+      aiGenerated = true;
+      console.log(`[ProgramFactory] AI generation success via ${aiResponse.source}`);
+    }
+  } catch (error) {
+    console.warn(`[ProgramFactory] AI failed: ${error.message}. Using personalized template.`);
+    programData = buildPersonalizedFallback(user, context);
+  }
 
-  return savedProgram;
+  // 3. VALIDATE & FIX (Don't throw, just fix)
+  programData = ensureValidStructure(programData, context);
+
+  // 4. SAVE TO DATABASE
+  const result = await saveAndPropagate(user, programData, options.source, aiGenerated);
+
+  console.log(`[ProgramFactory] SUCCESS: ${result.stats.workouts} workouts, ${result.stats.meals} meals, ${result.stats.habits} habits`);
+  return result;
 };
 
 // ═══════════════════════════════════════════════════════════
-// INTERNAL HELPERS
+// GATHER USER CONTEXT (From onboarding data)
 // ═══════════════════════════════════════════════════════════
 
-async function gatherUserContext(user) {
-  // Centralized "Truth" about the user
+function gatherUserContext(user) {
   const schedule = user.schedule || {};
-  
+  const profile = user.profile || {};
+  const lifestyle = user.lifestyle || {};
+  const goal = user.primaryGoal?.type || 'general-health';
+
   // Calculate TDEE
-  let tdee = 2000;
-  if (user.profile?.currentWeight) {
-    const weight = user.profile.currentWeight;
-    const activityMap = {
-      'sedentary': 1.2, 'lightly-active': 1.375, 'moderately-active': 1.55, 
-      'very-active': 1.725, 'extremely-active': 1.9
-    };
-    // Default to moderately active if undefined
-    const multiplier = activityMap[user.lifestyle?.jobType] || 1.55;
-    tdee = Math.round(weight * 15 * multiplier); 
-  }
+  const weight = profile.currentWeight || 180;
+  const activityMultipliers = {
+    'sedentary': 1.2,
+    'lightly-active': 1.375,
+    'moderately-active': 1.55,
+    'very-active': 1.725,
+    'extremely-active': 1.9
+  };
+  const multiplier = activityMultipliers[lifestyle.jobType] || 1.55;
+  let tdee = Math.round(weight * 15 * multiplier);
 
   // Adjust for goal
-  if (user.primaryGoal?.type === 'lose-fat') tdee = Math.round(tdee * 0.8);
-  if (user.primaryGoal?.type === 'build-muscle') tdee = Math.round(tdee * 1.1);
+  if (goal === 'lose-fat') tdee = Math.round(tdee * 0.8);
+  if (goal === 'build-muscle') tdee = Math.round(tdee * 1.1);
+
+  // Calculate macros
+  const proteinPerLb = (goal === 'build-muscle' || goal === 'build-strength') ? 1.2 : 1.0;
+  const protein = Math.round(weight * proteinPerLb);
+  const fat = Math.round((tdee * 0.30) / 9);
+  const carbs = Math.round((tdee - (protein * 4) - (fat * 9)) / 4);
 
   return {
+    weight,
     tdee,
+    protein,
+    carbs,
+    fat,
     daysPerWeek: schedule.daysPerWeek || 4,
+    preferredDays: schedule.preferredDays || ['monday', 'tuesday', 'thursday', 'friday'],
     experienceLevel: user.experience?.level || 'intermediate',
-    goal: user.primaryGoal?.type || 'general-health'
+    discipline: user.experience?.primaryDiscipline || 'general-fitness',
+    goal,
+    equipment: user.equipment?.availableEquipment || ['barbell', 'dumbbells', 'cable-machine'],
+    favoriteExercises: user.exercisePreferences?.favoriteExercises || [],
+    hatedExercises: user.exercisePreferences?.hatedExercises || [],
+    injuries: user.limitations?.injuries || []
   };
 }
 
+// ═══════════════════════════════════════════════════════════
+// SIMPLE AI PROMPT (Smaller = More Reliable)
+// ═══════════════════════════════════════════════════════════
+
+function buildSimplePrompt(user, ctx) {
+  return `Generate a ${ctx.daysPerWeek}-day/week ${ctx.discipline} program for ${user.name}.
+
+USER DATA:
+- Goal: ${ctx.goal}
+- Experience: ${ctx.experienceLevel}
+- Equipment: ${ctx.equipment.join(', ')}
+- Favorites: ${ctx.favoriteExercises.join(', ') || 'none'}
+- Avoid: ${ctx.hatedExercises.join(', ') || 'none'}
+- Injuries: ${ctx.injuries.map(i => i.bodyPart).join(', ') || 'none'}
+- Calories: ${ctx.tdee} (P:${ctx.protein}g C:${ctx.carbs}g F:${ctx.fat}g)
+
+OUTPUT JSON ONLY:
+{
+  "name": "Program Name",
+  "durationWeeks": 8,
+  "periodization": { "model": "linear", "phases": [{"name": "accumulation", "weeks": [1,2,3,4]}, {"name": "intensity", "weeks": [5,6,7]}, {"name": "deload", "weeks": [8]}] },
+  "nutritionPlan": {
+    "calorieTarget": ${ctx.tdee},
+    "macros": { "protein": ${ctx.protein}, "carbs": ${ctx.carbs}, "fat": ${ctx.fat} },
+    "mealPlan": {
+      "breakfast": { "name": "...", "foods": ["..."], "calories": ... },
+      "snack1": { "name": "...", "foods": ["..."], "calories": ... },
+      "lunch": { "name": "...", "foods": ["..."], "calories": ... },
+      "snack2": { "name": "...", "foods": ["..."], "calories": ... },
+      "dinner": { "name": "...", "foods": ["..."], "calories": ... }
+    }
+  },
+  "habitPlan": [
+    { "name": "Habit Name", "frequency": "daily", "trackingType": "boolean" }
+  ],
+  "weeklyTemplates": [
+    {
+      "weekNumber": 1,
+      "trainingDays": [
+        {
+          "dayOfWeek": "${ctx.preferredDays[0] || 'monday'}",
+          "exercises": [
+            { "name": "Exercise", "category": "main-lift", "sets": 4, "reps": "6-8", "rpe": 8 }
+          ]
+        }
+      ]
+    }
+  ]
+}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// PARSE AI RESPONSE
+// ═══════════════════════════════════════════════════════════
+
 function parseAIResponse(text) {
-  try {
-    // Robust Regex to find the largest JSON object
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found in AI response');
-    return JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    console.error('[ProgramFactory] JSON Parse Error. Raw text snippet:', text.slice(0, 200));
-    throw new Error('Failed to parse AI generated program. The AI output was not valid JSON.');
+  // Find JSON in response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON found in AI response');
   }
+  return JSON.parse(jsonMatch[0]);
 }
 
-function validateProgramStructure(data, expectedDays) {
-  // CRITICAL VALIDATION RULES
+// ═══════════════════════════════════════════════════════════
+// PERSONALIZED FALLBACK (When AI fails)
+// ═══════════════════════════════════════════════════════════
+
+function buildPersonalizedFallback(user, ctx) {
+  // Build workout templates based on user's discipline and schedule
+  const templates = buildWorkoutTemplates(ctx);
+
+  return {
+    name: `${user.name}'s ${capitalize(ctx.discipline)} Program`,
+    durationWeeks: 8,
+    periodization: {
+      model: "linear",
+      phases: [
+        { name: "accumulation", weeks: [1, 2, 3, 4] },
+        { name: "intensity", weeks: [5, 6, 7] },
+        { name: "deload", weeks: [8] }
+      ]
+    },
+    nutritionPlan: {
+      calorieTarget: ctx.tdee,
+      macros: { protein: ctx.protein, carbs: ctx.carbs, fat: ctx.fat },
+      mealPlan: {
+        breakfast: { name: "Power Breakfast", foods: ["Eggs", "Oatmeal", "Banana"], calories: Math.round(ctx.tdee * 0.2) },
+        snack1: { name: "Mid-Morning Fuel", foods: ["Greek Yogurt", "Almonds"], calories: Math.round(ctx.tdee * 0.12) },
+        lunch: { name: "Balanced Lunch", foods: ["Chicken Breast", "Rice", "Vegetables"], calories: Math.round(ctx.tdee * 0.25) },
+        snack2: { name: "Pre-Workout", foods: ["Protein Shake", "Apple"], calories: Math.round(ctx.tdee * 0.13) },
+        dinner: { name: "Recovery Dinner", foods: ["Salmon", "Sweet Potato", "Broccoli"], calories: Math.round(ctx.tdee * 0.3) }
+      }
+    },
+    habitPlan: [
+      { name: "Drink Water", frequency: "daily", trackingType: "boolean", description: "Stay hydrated throughout the day" },
+      { name: "Get 8 Hours Sleep", frequency: "daily", trackingType: "quantity", targetValue: 8, unit: "hours" },
+      { name: "Hit Protein Goal", frequency: "daily", trackingType: "quantity", targetValue: ctx.protein, unit: "g" },
+      { name: "Morning Mobility", frequency: "daily", trackingType: "boolean", description: "5-10 min mobility routine" }
+    ],
+    weeklyTemplates: templates
+  };
+}
+
+function buildWorkoutTemplates(ctx) {
+  const templates = [];
+
+  // Get appropriate exercises for user's discipline
+  const exerciseBank = getExerciseBank(ctx.discipline, ctx.equipment, ctx.hatedExercises);
+
+  for (let week = 1; week <= 8; week++) {
+    const isDeload = week === 4 || week === 8;
+    const trainingDays = [];
+
+    // Build each training day
+    for (let i = 0; i < ctx.daysPerWeek; i++) {
+      const dayOfWeek = ctx.preferredDays[i] || ['monday', 'tuesday', 'thursday', 'friday'][i];
+      const focus = getDayFocus(i, ctx.discipline, ctx.daysPerWeek);
+
+      trainingDays.push({
+        dayOfWeek,
+        focus,
+        exercises: buildDayExercises(focus, exerciseBank, ctx.experienceLevel, isDeload)
+      });
+    }
+
+    templates.push({
+      weekNumber: week,
+      deloadWeek: isDeload,
+      trainingDays,
+      restDays: getRestDays(ctx.preferredDays)
+    });
+  }
+
+  return templates;
+}
+
+function getExerciseBank(discipline, equipment, hatedExercises) {
+  const hated = hatedExercises.map(e => e.toLowerCase());
+
+  const banks = {
+    powerlifting: {
+      'upper-push': ['Barbell Bench Press', 'Incline Bench Press', 'Close Grip Bench Press', 'Overhead Press', 'Dumbbell Press'],
+      'upper-pull': ['Barbell Row', 'Pull-ups', 'Lat Pulldown', 'Cable Row', 'Face Pulls'],
+      'lower-quad': ['Barbell Squat', 'Front Squat', 'Leg Press', 'Bulgarian Split Squat', 'Lunges'],
+      'lower-hip': ['Conventional Deadlift', 'Romanian Deadlift', 'Sumo Deadlift', 'Hip Thrust', 'Good Mornings'],
+      'accessory': ['Dumbbell Curl', 'Tricep Pushdown', 'Lateral Raise', 'Rear Delt Fly', 'Plank']
+    },
+    bodybuilding: {
+      'chest': ['Barbell Bench Press', 'Incline Dumbbell Press', 'Cable Fly', 'Dips', 'Pec Deck'],
+      'back': ['Pull-ups', 'Barbell Row', 'Lat Pulldown', 'Cable Row', 'Dumbbell Row'],
+      'shoulders': ['Overhead Press', 'Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Face Pulls'],
+      'legs': ['Barbell Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curl', 'Leg Extension', 'Calf Raise'],
+      'arms': ['Barbell Curl', 'Tricep Pushdown', 'Hammer Curl', 'Skull Crushers', 'Cable Curl']
+    },
+    'general-fitness': {
+      'upper': ['Push-ups', 'Dumbbell Press', 'Dumbbell Row', 'Lat Pulldown', 'Shoulder Press'],
+      'lower': ['Goblet Squat', 'Romanian Deadlift', 'Lunges', 'Leg Press', 'Calf Raise'],
+      'core': ['Plank', 'Dead Bug', 'Russian Twist', 'Bird Dog', 'Ab Wheel'],
+      'full': ['Kettlebell Swing', 'Dumbbell Clean', 'Burpees', 'Mountain Climbers', 'Box Jumps']
+    }
+  };
+
+  const bank = banks[discipline] || banks['general-fitness'];
+
+  // Filter out hated exercises
+  Object.keys(bank).forEach(category => {
+    bank[category] = bank[category].filter(ex => !hated.includes(ex.toLowerCase()));
+  });
+
+  return bank;
+}
+
+function getDayFocus(dayIndex, discipline, daysPerWeek) {
+  const splits = {
+    powerlifting: {
+      3: ['Squat Focus', 'Bench Focus', 'Deadlift Focus'],
+      4: ['Squat/Quads', 'Bench/Push', 'Deadlift/Pull', 'Upper Volume'],
+      5: ['Squat Heavy', 'Bench Heavy', 'Deadlift Heavy', 'Upper Volume', 'Lower Volume'],
+      6: ['Squat Heavy', 'Bench Heavy', 'Deadlift Heavy', 'Squat Volume', 'Bench Volume', 'Accessories']
+    },
+    bodybuilding: {
+      3: ['Push', 'Pull', 'Legs'],
+      4: ['Chest/Triceps', 'Back/Biceps', 'Legs', 'Shoulders/Arms'],
+      5: ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms'],
+      6: ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs']
+    },
+    'general-fitness': {
+      3: ['Full Body A', 'Full Body B', 'Full Body C'],
+      4: ['Upper Body', 'Lower Body', 'Upper Body', 'Lower Body'],
+      5: ['Upper Push', 'Lower', 'Upper Pull', 'Lower', 'Full Body'],
+      6: ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs']
+    }
+  };
+
+  const disciplineSplits = splits[discipline] || splits['general-fitness'];
+  const daySplit = disciplineSplits[daysPerWeek] || disciplineSplits[4];
+  return daySplit[dayIndex % daySplit.length];
+}
+
+function buildDayExercises(focus, exerciseBank, experienceLevel, isDeload) {
+  const exercises = [];
+  const rpeBase = isDeload ? 6 : 8;
+  const setsMultiplier = isDeload ? 0.6 : 1;
+
+  // Exercise count based on experience
+  const exerciseCounts = {
+    'complete-beginner': 4,
+    'beginner': 5,
+    'intermediate': 6,
+    'advanced': 7,
+    'elite': 8
+  };
+  const targetCount = exerciseCounts[experienceLevel] || 6;
+
+  // Determine which exercise categories to use based on focus
+  const focusLower = focus.toLowerCase();
+  let categories = [];
+
+  if (focusLower.includes('squat') || focusLower.includes('quad') || focusLower.includes('legs') || focusLower.includes('lower')) {
+    categories = ['lower-quad', 'lower-hip', 'legs', 'lower'];
+  } else if (focusLower.includes('bench') || focusLower.includes('push') || focusLower.includes('chest')) {
+    categories = ['upper-push', 'chest', 'upper', 'shoulders'];
+  } else if (focusLower.includes('deadlift') || focusLower.includes('pull') || focusLower.includes('back')) {
+    categories = ['lower-hip', 'upper-pull', 'back', 'upper'];
+  } else if (focusLower.includes('upper')) {
+    categories = ['upper-push', 'upper-pull', 'upper', 'shoulders', 'arms'];
+  } else if (focusLower.includes('full')) {
+    categories = ['upper', 'lower', 'full', 'core'];
+  } else if (focusLower.includes('shoulder') || focusLower.includes('arm')) {
+    categories = ['shoulders', 'arms', 'upper-push', 'accessory'];
+  }
+
+  // Add accessory category
+  categories.push('accessory');
+
+  // Collect exercises from relevant categories
+  let availableExercises = [];
+  categories.forEach(cat => {
+    if (exerciseBank[cat]) {
+      availableExercises = availableExercises.concat(exerciseBank[cat]);
+    }
+  });
+
+  // Remove duplicates
+  availableExercises = [...new Set(availableExercises)];
+
+  // Pick exercises up to target count
+  for (let i = 0; i < Math.min(targetCount, availableExercises.length); i++) {
+    const isMainLift = i < 2;
+    exercises.push({
+      name: availableExercises[i],
+      category: isMainLift ? 'main-lift' : 'accessory',
+      sets: Math.round((isMainLift ? 4 : 3) * setsMultiplier),
+      reps: isMainLift ? '5-6' : '8-12',
+      rpe: isMainLift ? rpeBase : rpeBase - 1,
+      rest: isMainLift ? '3-4 min' : '90 sec'
+    });
+  }
+
+  return exercises;
+}
+
+function getRestDays(preferredDays) {
+  const allDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  return allDays.filter(d => !preferredDays.includes(d));
+}
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1).replace(/-/g, ' ');
+}
+
+// ═══════════════════════════════════════════════════════════
+// VALIDATION & FIXING (Don't throw, fix issues)
+// ═══════════════════════════════════════════════════════════
+
+function ensureValidStructure(data, context) {
+  // Ensure duration
   if (!data.durationWeeks || data.durationWeeks < 4) {
-    throw new Error(`Program duration too short: ${data.durationWeeks} weeks. Minimum 4.`);
+    data.durationWeeks = 8;
   }
 
+  // Ensure periodization
+  if (!data.periodization) {
+    data.periodization = {
+      model: 'linear',
+      phases: [
+        { name: 'accumulation', weeks: [1, 2, 3, 4] },
+        { name: 'intensity', weeks: [5, 6, 7] },
+        { name: 'deload', weeks: [8] }
+      ]
+    };
+  }
+
+  // Ensure nutrition plan
+  if (!data.nutritionPlan || !data.nutritionPlan.mealPlan) {
+    data.nutritionPlan = {
+      calorieTarget: context.tdee,
+      macros: { protein: context.protein, carbs: context.carbs, fat: context.fat },
+      mealPlan: {
+        breakfast: { name: "Breakfast", foods: ["Eggs", "Toast"], calories: Math.round(context.tdee * 0.2) },
+        snack1: { name: "Snack", foods: ["Yogurt"], calories: Math.round(context.tdee * 0.12) },
+        lunch: { name: "Lunch", foods: ["Chicken", "Rice"], calories: Math.round(context.tdee * 0.25) },
+        snack2: { name: "Snack", foods: ["Protein Bar"], calories: Math.round(context.tdee * 0.13) },
+        dinner: { name: "Dinner", foods: ["Fish", "Vegetables"], calories: Math.round(context.tdee * 0.3) }
+      }
+    };
+  }
+
+  // Ensure habit plan
+  if (!data.habitPlan || !Array.isArray(data.habitPlan)) {
+    data.habitPlan = [
+      { name: "Drink Water", frequency: "daily", trackingType: "boolean" },
+      { name: "Get 8 Hours Sleep", frequency: "daily", trackingType: "quantity", targetValue: 8 }
+    ];
+  }
+
+  // Ensure weekly templates
   if (!data.weeklyTemplates || data.weeklyTemplates.length === 0) {
-    throw new Error('No weekly templates generated.');
+    data.weeklyTemplates = buildWorkoutTemplates(context);
   }
 
-  // Check first week for structure validity
-  const week1 = data.weeklyTemplates[0];
-  if (!week1.trainingDays || week1.trainingDays.length !== expectedDays) {
-    // We allow a small margin of error or warn, but strict mode throws
-    console.warn(`[ProgramFactory] Warning: Expected ${expectedDays} training days, got ${week1.trainingDays?.length}`);
-  }
-
-  // Check for nutrition
-  if (!data.nutritionPlan?.mealPlan?.breakfast) {
-    throw new Error('Incomplete nutrition plan. Missing breakfast.');
-  }
+  return data;
 }
 
-async function saveAndPropagate(user, data, source) {
-  // A. Create Program
+// ═══════════════════════════════════════════════════════════
+// SAVE & PROPAGATE TO CALENDAR
+// ═══════════════════════════════════════════════════════════
+
+async function saveAndPropagate(user, data, source, aiGenerated) {
+  // A. Create Program document
   const program = new Program({
     userId: user._id,
-    name: data.name || 'FORGE Generated Program',
+    name: data.name || 'FORGE Program',
     goal: user.primaryGoal?.type || 'general-health',
     status: 'active',
     startDate: new Date(),
     durationWeeks: data.durationWeeks,
     currentWeek: 1,
-    periodization: data.periodization || { model: 'linear', phases: [] },
+    periodization: data.periodization,
     weeklyTemplates: data.weeklyTemplates,
     nutritionPlan: data.nutritionPlan,
-    aiGenerated: true,
-    aiRationale: `Generated via ${source || 'system'}`
+    aiGenerated,
+    aiRationale: `Generated via ${source || 'system'}${aiGenerated ? '' : ' (fallback template)'}`
   });
 
   const savedProgram = await program.save();
   console.log(`[ProgramFactory] Program ${savedProgram._id} saved.`);
 
-  // B. Update AI Coach
+  // B. Update AI Coach reference
   const aiCoach = await AICoach.getOrCreateForUser(user._id);
   aiCoach.currentProgramId = savedProgram._id;
   await aiCoach.save();
 
-  // C. Propagate Workouts (Using Model Method)
-  const workoutEvents = await savedProgram.generateCalendarEvents();
-  console.log(`[ProgramFactory] Propagated ${workoutEvents.length} workout events.`);
+  // C. Generate workout calendar events
+  let workoutEvents = [];
+  try {
+    workoutEvents = await savedProgram.generateCalendarEvents();
+  } catch (err) {
+    console.warn('[ProgramFactory] Workout event generation failed:', err.message);
+    workoutEvents = await manualGenerateWorkoutEvents(user._id, savedProgram);
+  }
 
-  // D. Propagate Meals (Centralized Logic)
-  const mealEvents = await generateMealEvents(user._id, savedProgram, data.nutritionPlan.mealPlan);
-  console.log(`[ProgramFactory] Propagated ${mealEvents.length} meal events.`);
+  // D. Generate meal calendar events
+  const mealEvents = await generateMealEvents(user._id, savedProgram, data.nutritionPlan?.mealPlan);
 
-  // E. Update Nutrition Targets
+  // E. Update nutrition targets
   await updateNutritionTargets(user._id, data.nutritionPlan);
 
-  // F. Propagate Habits
-  const habitsCreated = await generateHabits(user._id, data.habitPlan);
-  console.log(`[ProgramFactory] Propagated ${habitsCreated.length} habits.`);
+  // F. Generate habits
+  const habits = await generateHabits(user._id, data.habitPlan);
 
   return {
     program: savedProgram,
     stats: {
       workouts: workoutEvents.length,
       meals: mealEvents.length,
-      habits: habitsCreated.length
+      habits: habits.length
     }
   };
 }
 
+async function manualGenerateWorkoutEvents(userId, program) {
+  const events = [];
+  const startDate = new Date(program.startDate);
+
+  for (const week of program.weeklyTemplates) {
+    for (const day of week.trainingDays || []) {
+      const dayIndex = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+        .indexOf(day.dayOfWeek?.toLowerCase());
+      if (dayIndex === -1) continue;
+
+      const eventDate = new Date(startDate);
+      eventDate.setDate(eventDate.getDate() + ((week.weekNumber - 1) * 7) + dayIndex);
+
+      events.push({
+        userId,
+        type: 'workout',
+        title: day.focus || `Week ${week.weekNumber} Workout`,
+        date: eventDate,
+        startTime: '09:00',
+        exercises: day.exercises || [],
+        programId: program._id,
+        weekNumber: week.weekNumber,
+        periodizationPhase: week.deloadWeek ? 'deload' : 'standard',
+        aiGenerated: true,
+        status: 'scheduled'
+      });
+    }
+  }
+
+  if (events.length > 0) {
+    return await CalendarEvent.insertMany(events);
+  }
+  return [];
+}
+
 async function generateMealEvents(userId, program, mealPlan) {
   if (!mealPlan) return [];
-  
+
   const events = [];
   const mealTypes = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
   const mealTimes = {
     breakfast: '08:00', snack1: '10:30', lunch: '12:30', snack2: '15:30', dinner: '18:30'
   };
 
-  // Generate for full duration
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   for (let week = 0; week < program.durationWeeks; week++) {
     for (let day = 0; day < 7; day++) {
       const eventDate = new Date(program.startDate);
       eventDate.setDate(eventDate.getDate() + (week * 7) + day);
-      
-      // Skip past
-      const today = new Date();
-      today.setHours(0,0,0,0);
+
       if (eventDate < today) continue;
 
       mealTypes.forEach(type => {
@@ -208,156 +574,64 @@ async function generateMealEvents(userId, program, mealPlan) {
 }
 
 async function updateNutritionTargets(userId, nutritionPlan) {
-  const nutrition = await Nutrition.getOrCreateForUser(userId);
-  nutrition.targets = {
-    calories: nutritionPlan.calorieTarget,
-    protein: nutritionPlan.macros?.protein || 0,
-    carbs: nutritionPlan.macros?.carbs || 0,
-    fat: nutritionPlan.macros?.fat || 0,
-    calculatedAt: new Date()
-  };
-  await nutrition.save();
+  if (!nutritionPlan) return;
+
+  try {
+    const nutrition = await Nutrition.getOrCreateForUser(userId);
+    nutrition.targets = {
+      calories: nutritionPlan.calorieTarget || 2000,
+      protein: nutritionPlan.macros?.protein || 150,
+      carbs: nutritionPlan.macros?.carbs || 200,
+      fat: nutritionPlan.macros?.fat || 70,
+      calculatedAt: new Date()
+    };
+    await nutrition.save();
+  } catch (err) {
+    console.warn('[ProgramFactory] Nutrition update failed:', err.message);
+  }
 }
 
 async function generateHabits(userId, habitPlan) {
   if (!habitPlan || !Array.isArray(habitPlan)) return [];
 
   const Habit = require('../models/Habit');
-  
-  const createdHabits = [];
-  
-  // Valid enums from Habit model
+  const created = [];
+
   const VALID_FREQUENCIES = ['daily', 'weekdays', 'weekends', 'specific-days', 'x-per-week'];
   const VALID_TRACKING = ['boolean', 'quantity', 'duration', 'rating'];
 
   for (const h of habitPlan) {
-    // Check if habit already exists
-    const exists = await Habit.findOne({ userId, name: h.name, isActive: true });
-    if (exists) continue;
-
-    // SANITIZE DATA
-    let frequency = (h.frequency || 'daily').toLowerCase();
-    let trackingType = (h.trackingType || 'boolean').toLowerCase();
-    let timesPerWeek = h.timesPerWeek || 7;
-
-    // Fix common AI hallucinations
-    if (frequency === 'weekly' || frequency === 'once a week') {
-      frequency = 'x-per-week';
-      timesPerWeek = 1;
-    }
-    if (!VALID_FREQUENCIES.includes(frequency)) {
-      frequency = 'daily'; // Fallback
-    }
-    if (!VALID_TRACKING.includes(trackingType)) {
-      trackingType = 'boolean'; // Fallback
-    }
-
     try {
+      // Check if exists
+      const exists = await Habit.findOne({ userId, name: h.name, isActive: true });
+      if (exists) continue;
+
+      // Sanitize
+      let frequency = (h.frequency || 'daily').toLowerCase();
+      let trackingType = (h.trackingType || 'boolean').toLowerCase();
+
+      if (frequency === 'weekly') frequency = 'x-per-week';
+      if (!VALID_FREQUENCIES.includes(frequency)) frequency = 'daily';
+      if (!VALID_TRACKING.includes(trackingType)) trackingType = 'boolean';
+
       const newHabit = await Habit.create({
         userId,
         name: h.name,
-        description: h.description,
+        description: h.description || '',
         category: h.category || 'custom',
         frequency,
-        timesPerWeek,
+        timesPerWeek: h.timesPerWeek || 7,
         trackingType,
         targetValue: h.targetValue || 1,
         unit: h.unit || '',
-        icon: h.icon || 'check-circle',
-        color: h.color || '#f97316'
+        icon: 'check-circle',
+        color: '#f97316'
       });
-      createdHabits.push(newHabit);
+      created.push(newHabit);
     } catch (err) {
-      console.warn(`[ProgramFactory] Skipped invalid habit "${h.name}":`, err.message);
+      console.warn(`[ProgramFactory] Habit "${h.name}" failed:`, err.message);
     }
   }
 
-  return createdHabits;
-}
-
-// Re-export the builder function if the controller wants to see the prompt
-function buildForgePrompt(user, context) {
-  // Unpack context
-  const { tdee, daysPerWeek, experienceLevel, goal } = context;
-  
-  // Unpack user data
-  const competitionData = user.competitionPrep || {};
-  const bodyCompData = user.bodyComposition || {};
-  const lifestyleData = user.lifestyle || {};
-  const experienceData = user.experience || {};
-  const exercisePrefs = user.exercisePreferences || {};
-  const equipmentData = user.equipment || {};
-
-  // Calculate macros
-  const weight = user.profile?.currentWeight || 180;
-  let proteinPerLb = 1.0;
-  if (goal === 'build-muscle' || goal === 'build-strength') proteinPerLb = 1.2;
-  const protein = Math.round(weight * proteinPerLb);
-  const fat = Math.round((tdee * 0.30) / 9);
-  const carbs = Math.round((tdee - (protein * 4) - (fat * 9)) / 4);
-
-  return `OBJECTIVE: Act as the CLOCKWORK CONFIGURATION ENGINE. 
-TASK: Map USER CONTEXT into PROGRAM SLOTS. 
-OUTPUT: Valid JSON ONLY.
-
-═══════════════════════════════════════════════════════════
-USER CONTEXT (DATA TO MAP)
-═══════════════════════════════════════════════════════════
-- Name: ${user.name}
-- Goal: ${goal}
-- Experience: ${experienceLevel}
-- Schedule: ${daysPerWeek} days/week
-- Equipment: ${equipmentData.availableEquipment?.join(', ') || 'commercial gym'}
-- Favorites: ${exercisePrefs.favoriteExercises?.join(', ') || 'Compound lifts'}
-- Hated: ${exercisePrefs.hatedExercises?.join(', ') || 'None'}
-- Injuries: ${user.limitations?.injuries?.map(i => i.bodyPart).join(', ') || 'None'}
-
-═══════════════════════════════════════════════════════════
-SLOT 1: NUTRITION (CALCULATED VALUES)
-═══════════════════════════════════════════════════════════
-- Daily Calories: ${tdee}
-- Macros: Protein ${protein}g, Carbs ${carbs}g, Fat ${fat}g
-- Requirement: 5 meals (breakfast, snack1, lunch, snack2, dinner)
-
-═══════════════════════════════════════════════════════════
-SLOT 2: HABITS (SUPPORT SYSTEM)
-═══════════════════════════════════════════════════════════
-- Requirement: 3-5 daily habits (e.g., Morning Mobility, Protein Goal, Sleep)
-
-═══════════════════════════════════════════════════════════
-SLOT 3: WORKOUTS (8-WEEK PROGRESSION)
-═══════════════════════════════════════════════════════════
-- Every workout must have:
-  1. warmup (2-3 exercises)
-  2. main-lift (2-4 exercises with RPE and %Max)
-  3. accessory (4-6 exercises)
-  4. cooldown (1-2 exercises)
-- Total exercises per workout: 12-18
-
-═══════════════════════════════════════════════════════════
-JSON SCHEMA (STRICT ENFORCEMENT)
-═══════════════════════════════════════════════════════════
-{
-  "name": "Program Name",
-  "durationWeeks": 8,
-  "periodization": { "model": "linear", "phases": [...] },
-  "nutritionPlan": { "calorieTarget": ${tdee}, "macros": {...}, "mealPlan": {...} },
-  "habitPlan": [ { "name": "...", "frequency": "daily", "trackingType": "boolean" } ],
-  "weeklyTemplates": [
-    {
-      "weekNumber": 1,
-      "trainingDays": [
-        {
-          "dayOfWeek": "monday",
-          "exercises": [
-            { "name": "...", "category": "warmup|main-lift|accessory|cooldown", "sets": 3, "reps": "10", "rpe": 8 }
-          ]
-        }
-      ]
-    }
-  ]
-}
-
-FINAL RULE: Zero explanation text. Fill the slots.`;
-}`;
+  return created;
 }
