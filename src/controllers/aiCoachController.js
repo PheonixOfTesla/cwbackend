@@ -692,7 +692,7 @@ exports.askCoach = async (req, res) => {
     let actionPromptAddition = '';
 
     // ═══════════════════════════════════════════════════════════
-    // GENERATE FULL PROGRAM (Uses shared core function)
+    // GENERATE FULL PROGRAM (Comprehensive 8-week with meals)
     // ═══════════════════════════════════════════════════════════
     if (actionIntent === 'GENERATE_FULL_PROGRAM') {
       try {
@@ -706,29 +706,24 @@ exports.askCoach = async (req, res) => {
           await activeProgram.save();
         }
 
-        // Use shared core function from programController (DRY - single source of truth)
-        const { generateProgramCore } = require('./programController');
+        // DELEGATE TO BULLETPROOF FACTORY
+        const programFactory = require('../services/programFactory');
+        const result = await programFactory.createProgramForUser(userId, { source: 'chat' });
+        const savedProgram = result.program;
 
-        // Call the shared program generation function
-        const result = await generateProgramCore(user, aiCoach);
+        // Build Action Result for Frontend
+        actionResult = {
+          action: 'PROGRAM_GENERATED',
+          programId: savedProgram._id,
+          stats: {
+            calendarEventsCreated: result.stats.workouts,
+            mealEventsCreated: result.stats.meals,
+            totalEventsCreated: result.stats.workouts + result.stats.meals,
+            weeksPlanned: savedProgram.durationWeeks
+          }
+        };
 
-        if (result.success) {
-          const stats = result.program.stats;
-          actionResult = {
-            action: 'PROGRAM_GENERATED',
-            programId: result.program._id,
-            stats: {
-              calendarEventsCreated: stats.calendarEventsCreated,
-              mealEventsCreated: stats.mealEventsCreated,
-              totalEventsCreated: stats.totalEventsCreated,
-              weeksPlanned: stats.weeksPlanned
-            }
-          };
-
-          actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${result.program.durationWeeks}-week program with ${stats.calendarEventsCreated} workouts and ${stats.mealEventsCreated} meals (${stats.totalEventsCreated} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
-        } else {
-          throw new Error(result.error || result.message || 'Program generation failed');
-        }
+        actionPromptAddition = `\n\n[SYSTEM: You just created a comprehensive ${savedProgram.durationWeeks}-week program with ${result.stats.workouts} workouts and ${result.stats.meals} meals (${result.stats.workouts + result.stats.meals} total events) in the user's calendar. Tell them their program is ready and they can view it in the Calendar tab!]`;
 
       } catch (programErr) {
         console.error('[FORGE] Full program generation error:', programErr);
