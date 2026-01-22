@@ -39,16 +39,8 @@ const AI_PROVIDERS = [
     isFree: false
   },
   {
-    name: 'DeepInfra K2',
-    model: 'deepinfra/moonshot-k2',  // $0.40/1M - cheapest K2 mirror
-    client: openrouter,
-    timeout: 90000,
-    isLocal: false,
-    isFree: false
-  },
-  {
-    name: 'Together K2',
-    model: 'together/kimi-k2-0705',  // $0.55/1M - good latency
+    name: 'Novita K2',
+    model: 'novita/kimi-k2',  // Novita hosts K2
     client: openrouter,
     timeout: 90000,
     isLocal: false,
@@ -141,8 +133,8 @@ async function callProvider(provider, prompt, systemPrompt, maxTokens) {
     extra_headers: {
       'HTTP-Referer': 'https://clockwork.fit',
       'X-Title': 'ClockWork Fitness',
-      // Provider fallback: moonshot free → deepinfra paid → together
-      'openrouter-provider': JSON.stringify({ order: ['moonshot', 'deepinfra', 'together'], allow_fallback: true }),
+      // Provider fallback: moonshot → novita → nvidia (valid K2 hosts)
+      'openrouter-provider': JSON.stringify({ order: ['moonshot', 'novita', 'nvidia'], allow_fallback: true }),
       // Enable prompt caching (30% hit rate on repeated system prompts)
       'cache-prompt': 'true'
     }
