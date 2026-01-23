@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendVerificationCode, sendPasswordResetCode, sendWelcomeEmail } = require('../utils/email');
+const { checkAndUpgradeVIP, isVIPEmail } = require('../middleware/adminAuth');
 
 // Twilio Verify for email verification (with validation)
 const twilio = require('twilio');
@@ -89,7 +90,12 @@ exports.register = async (req, res) => {
         let subscriptionTier = 'free';
         let subscriptionStatus = 'trialing'; // Start everyone on trial
 
-        if (finalUserType === 'coach') {
+        // Check if user is VIP (auto-upgrade from VIP_EMAILS env var)
+        if (isVIPEmail(email)) {
+            subscriptionTier = 'vip';
+            subscriptionStatus = 'active';
+            console.log(`👑 VIP registration detected for: ${email}`);
+        } else if (finalUserType === 'coach') {
             subscriptionTier = 'coach_starter'; // Coaches start with starter tier
         }
 
@@ -370,6 +376,12 @@ async function completeLogin(user, res) {
     const trialExpired = await user.checkTrialExpiration();
     if (trialExpired) {
         console.log(`⏰ Trial expired for: ${user.email}`);
+    }
+
+    // Auto-upgrade VIP users if in VIP_EMAILS env var
+    const wasUpgraded = await checkAndUpgradeVIP(user);
+    if (wasUpgraded) {
+        console.log(`👑 VIP auto-upgrade applied for: ${user.email}`);
     }
 
     // Update last login

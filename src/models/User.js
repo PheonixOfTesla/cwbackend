@@ -201,7 +201,7 @@ const userSchema = new mongoose.Schema({
   subscription: {
     tier: {
       type: String,
-      enum: ['free', 'pro', 'coach_starter', 'coach_pro', 'coach_scale', 'coach_enterprise'],
+      enum: ['free', 'pro', 'vip', 'coach_starter', 'coach_pro', 'coach_scale', 'coach_enterprise'],
       default: 'free'
     },
     status: {
@@ -691,6 +691,7 @@ userSchema.methods.getSubscriptionFeatures = function() {
   const features = {
     'free': { workoutsPerWeek: 3, aiQueriesPerMonth: 5, wearables: false, mealPlans: false },
     'pro': { workoutsPerWeek: Infinity, aiQueriesPerMonth: 100, wearables: true, mealPlans: true },
+    'vip': { workoutsPerWeek: Infinity, aiQueriesPerMonth: Infinity, wearables: true, mealPlans: true, prioritySupport: true, betaFeatures: true, exportData: true },
     'coach_starter': { clients: 10, aiAssist: true, analytics: 'basic', mealPlans: true },
     'coach_pro': { clients: 50, aiAssist: true, analytics: 'advanced', mealPlans: true },
     'coach_scale': { clients: 150, aiAssist: true, analytics: 'advanced', whiteLabel: false, mealPlans: true },

@@ -12,7 +12,7 @@ const subscriptionSchema = new mongoose.Schema({
   // Tier
   tier: {
     type: String,
-    enum: ['free', 'pro', 'elite'],
+    enum: ['free', 'pro', 'elite', 'vip'],
     default: 'free'
   },
 
@@ -75,6 +75,18 @@ subscriptionSchema.statics.TIER_LIMITS = {
     exportData: true,
     prioritySupport: true,
     betaFeatures: true
+  },
+  vip: {
+    workoutsPerWeek: Infinity,
+    aiWorkoutGenerations: Infinity,
+    aiCoachingQueries: Infinity,
+    wearableSync: true,
+    communities: Infinity,
+    checkInReminders: true,
+    exportData: true,
+    prioritySupport: true,
+    betaFeatures: true,
+    isVIP: true
   }
 };
 

@@ -191,6 +191,9 @@ const habitRoutes = require('./src/routes/habits');
 // Testing
 const testRoutes = require('./src/routes/test');
 
+// Admin Dashboard
+const adminRoutes = require('./src/routes/admin');
+
 // ============================================
 // MOUNT ALL ROUTES
 // ============================================
@@ -233,6 +236,9 @@ app.use('/api/habits', habitRoutes);
 // Testing
 app.use('/api/tests', testRoutes);
 
+// Admin Dashboard
+app.use('/api/admin', adminRoutes);
+
 // ============================================
 // HEALTH CHECK ENDPOINT
 // ============================================
@@ -265,6 +271,7 @@ app.get('/api/health', async (req, res) => {
             intelligence: '✅',
             wearables: '✅',
             subscriptions: '✅',
+            admin: '✅ NEW - Admin dashboard',
             tests: '✅'
         }
     };
@@ -317,6 +324,7 @@ app.get('/api', (req, res) => {
             intelligence: '/api/intelligence',
             wearables: '/api/wearables',
             subscriptions: '/api/subscriptions',
+            admin: '/api/admin [NEW - Admin Dashboard]',
             health: '/api/health'
         }
     });
@@ -355,6 +363,7 @@ app.use('/api/*', (req, res) => {
             '/api/intelligence',
             '/api/wearables',
             '/api/subscriptions',
+            '/api/admin',
             '/api/health'
         ]
     });
