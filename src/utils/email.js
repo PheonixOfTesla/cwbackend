@@ -97,7 +97,6 @@ const sendInfluencerDenialEmail = async (email, name, reason) => {
     return sendEmail(email, subject, html);
 };
 
-const { newInfluencerWelcomeTemplate } = require('../templates/emails/newInfluencerWelcome');
 const sendNewInfluencerWelcomeEmail = async (email, name, password) => {
     const html = newInfluencerWelcomeTemplate(name, email, password);
     const subject = `Welcome to the ClockWork Partner Program!`;
