@@ -1,6 +1,9 @@
 // Src/utils/email.js - ClockWork Email Service (SendGrid)
 const { passwordResetTemplate } = require('../templates/emails/passwordReset');
 const { welcomeTemplate } = require('../templates/emails/welcome');
+const { influencerApprovalTemplate } = require('../templates/emails/influencerApproval');
+const { influencerDenialTemplate } = require('../templates/emails/influencerDenial');
+const { newInfluencerWelcomeTemplate } = require('../templates/emails/newInfluencerWelcome');
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@clockwork.fit';
@@ -80,9 +83,33 @@ const sendWelcomeEmail = async (email, name) => {
     return sendEmail(email, subject, html);
 };
 
+const sendInfluencerApprovalEmail = async (email, name, affiliateCode) => {
+    // TODO: Generate a real Stripe Connect link
+    const stripeConnectLink = `https://connect.stripe.com/oauth/v2/authorize?response_type=code&client_id=${process.env.STRIPE_CONNECT_CLIENT_ID}&scope=read_write`;
+    const html = influencerApprovalTemplate(name, affiliateCode, stripeConnectLink);
+    const subject = `You're Approved to Partner with ClockWork ⚡`;
+    return sendEmail(email, subject, html);
+};
+
+const sendInfluencerDenialEmail = async (email, name, reason) => {
+    const html = influencerDenialTemplate(name, reason);
+    const subject = `ClockWork Partner Application`;
+    return sendEmail(email, subject, html);
+};
+
+const { newInfluencerWelcomeTemplate } = require('../templates/emails/newInfluencerWelcome');
+const sendNewInfluencerWelcomeEmail = async (email, name, password) => {
+    const html = newInfluencerWelcomeTemplate(name, email, password);
+    const subject = `Welcome to the ClockWork Partner Program!`;
+    return sendEmail(email, subject, html);
+};
+
 module.exports = {
     sendEmail,
     sendPasswordResetCode,
     sendVerificationCode,
-    sendWelcomeEmail
+    sendWelcomeEmail,
+    sendInfluencerApprovalEmail,
+    sendInfluencerDenialEmail,
+    sendNewInfluencerWelcomeEmail
 };

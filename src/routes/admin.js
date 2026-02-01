@@ -22,6 +22,11 @@ router.post('/vip', adminController.addVIP);
 // DELETE /api/admin/vip/:email - Remove VIP user
 router.delete('/vip/:email', adminController.removeVIP);
 
+// Influencer Applications
+router.get('/influencer-applications', adminController.getInfluencerApplications);
+router.post('/influencer-applications/:id/approve', adminController.approveInfluencerApplication);
+router.post('/influencer-applications/:id/deny', adminController.denyInfluencerApplication);
+
 // Documentation
 router.get('/docs', (req, res) => {
   res.json({

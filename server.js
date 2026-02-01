@@ -193,6 +193,7 @@ const testRoutes = require('./src/routes/test');
 
 // Admin Dashboard
 const adminRoutes = require('./src/routes/admin');
+const influencerRoutes = require('./src/routes/influencer');
 
 // ============================================
 // MOUNT ALL ROUTES
@@ -238,6 +239,7 @@ app.use('/api/tests', testRoutes);
 
 // Admin Dashboard
 app.use('/api/admin', adminRoutes);
+app.use('/api/influencers', influencerRoutes);
 
 // ============================================
 // HEALTH CHECK ENDPOINT

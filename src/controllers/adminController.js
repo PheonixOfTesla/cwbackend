@@ -2,6 +2,10 @@
 const User = require('../models/User');
 const Workout = require('../models/Workout');
 const Program = require('../models/Program');
+const InfluencerApplication = require('../models/InfluencerApplication');
+const Influencer = require('../models/Influencer');
+const crypto = require('crypto');
+const { sendInfluencerApprovalEmail, sendInfluencerDenialEmail, sendNewInfluencerWelcomeEmail } = require('../utils/email');
 const { getVIPEmails } = require('../middleware/adminAuth');
 
 // GET /api/admin/users - List all users with search/filter
@@ -331,10 +335,132 @@ const getVIPUsers = async (req, res) => {
   }
 };
 
+const getInfluencerApplications = async (req, res) => {
+  try {
+    const { status = 'pending', page = 1, limit = 20 } = req.query;
+    const query = { status };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [applications, total] = await Promise.all([
+      InfluencerApplication.find(query)
+        .sort({ createdAt: 'desc' })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      InfluencerApplication.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        applications,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Admin getInfluencerApplications error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch influencer applications.' });
+  }
+};
+
+const approveInfluencerApplication = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const application = await InfluencerApplication.findById(id);
+        if (!application) {
+            return res.status(404).json({ success: false, message: 'Application not found.' });
+        }
+        if (application.status !== 'pending') {
+            return res.status(400).json({ success: false, message: 'Application has already been processed.' });
+        }
+
+        // Check if user already exists
+        let user = await User.findOne({ email: application.email });
+
+        // If user doesn't exist, create a new one
+        if (!user) {
+            const tempPassword = crypto.randomBytes(8).toString('hex');
+            user = new User({
+                name: application.name,
+                email: application.email,
+                password: tempPassword,
+                userType: 'individual', // Or another default
+            });
+            await user.save();
+            // Email user their temporary password
+            await sendNewInfluencerWelcomeEmail(user.email, user.name, tempPassword);
+        }
+
+        // Generate a unique affiliate code
+        const affiliateCode = `${application.name.split(' ')[0].toLowerCase()}${crypto.randomBytes(3).toString('hex')}`;
+
+        const newInfluencer = new Influencer({
+            user: user._id,
+            application: application._id,
+            affiliateCode,
+        });
+
+        await newInfluencer.save();
+
+        application.status = 'approved';
+        await application.save();
+        
+        // Send approval email
+        await sendInfluencerApprovalEmail(user.email, user.name, newInfluencer.affiliateCode);
+
+        res.json({
+            success: true,
+            message: 'Influencer application approved.',
+            data: { influencer: newInfluencer, user }
+        });
+
+    } catch (error) {
+        console.error('Admin approveInfluencerApplication error:', error);
+        res.status(500).json({ success: false, message: 'Server error while approving application.' });
+    }
+};
+
+const denyInfluencerApplication = async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+    try {
+        const application = await InfluencerApplication.findById(id);
+        if (!application) {
+            return res.status(404).json({ success: false, message: 'Application not found.' });
+        }
+        if (application.status !== 'pending') {
+            return res.status(400).json({ success: false, message: 'Application has already been processed.' });
+        }
+
+        application.status = 'denied';
+        if (reason) {
+            application.adminNotes = reason;
+        }
+        await application.save();
+
+        // Send denial email
+        await sendInfluencerDenialEmail(application.email, application.name, reason);
+        
+        res.json({ success: true, message: 'Influencer application denied.' });
+
+    } catch (error) {
+        console.error('Admin denyInfluencerApplication error:', error);
+        res.status(500).json({ success: false, message: 'Server error while denying application.' });
+    }
+};
+
 module.exports = {
   getUsers,
   getStats,
   addVIP,
   removeVIP,
-  getVIPUsers
+  getVIPUsers,
+  getInfluencerApplications,
+  approveInfluencerApplication,
+  denyInfluencerApplication
 };
