@@ -177,6 +177,38 @@ const requireCoachSubscription = (req, res, next) => {
 };
 
 // ============================================
+// OPTIONAL AUTH (For routes that work with or without login)
+// ============================================
+const optionalAuth = async (req, res, next) => {
+    let token;
+
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const secret = process.env.JWT_SECRET;
+
+            if (secret) {
+                const decoded = jwt.verify(token, secret);
+                const userIdToFind = decoded.id || decoded.userId || decoded._id;
+
+                if (userIdToFind) {
+                    req.user = await User.findById(userIdToFind).select('-password');
+                    if (req.user) {
+                        req.user.id = req.user._id.toString();
+                        req.user.userId = req.user._id.toString();
+                    }
+                }
+            }
+        } catch (error) {
+            // Silently ignore auth errors for optional auth
+            req.user = null;
+        }
+    }
+
+    next();
+};
+
+// ============================================
 // LEGACY ADMIN MIDDLEWARE (for backwards compatibility)
 // ============================================
 const admin = (req, res, next) => {
@@ -198,6 +230,7 @@ const admin = (req, res, next) => {
 // ============================================
 module.exports = {
     protect,
+    optionalAuth,
     admin,
     // New B2C/B2B middleware
     requireCoach,

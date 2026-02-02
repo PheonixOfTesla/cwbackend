@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const coachController = require('../controllers/coachController');
-const { protect, requireCoach } = require('../middleware/auth');
+const postController = require('../controllers/postController');
+const coachSubscriptionController = require('../controllers/coachSubscriptionController');
+const reviewController = require('../controllers/reviewController');
+const { protect, requireCoach, optionalAuth } = require('../middleware/auth');
 const { coachInviteLimiter } = require('../middleware/rateLimiter');
 
 // ============================================
@@ -11,6 +14,16 @@ const { coachInviteLimiter } = require('../middleware/rateLimiter');
 
 // GET /api/coach/list - Get all coaches (for signup)
 router.get('/list', coachController.getCoachesList);
+
+// GET /api/coach/:coachId/reviews - Get coach reviews (public)
+router.get('/:coachId/reviews', reviewController.getCoachReviews);
+
+// ============================================
+// OPTIONAL AUTH ROUTES (Works with or without login)
+// ============================================
+
+// GET /api/coach/:coachId/feed - Get coach content feed (public sees public posts, subscribers see more)
+router.get('/:coachId/feed', optionalAuth, postController.getCoachFeed);
 
 // All routes below require authentication
 router.use(protect);
@@ -92,5 +105,68 @@ router.get('/sessions', coachController.getSessions);
 
 // POST /api/coach/accept-invitation/:invitationCode - Accept coach invitation
 router.post('/accept-invitation/:invitationCode', coachController.acceptInvitation);
+
+// ============================================
+// CONTENT POSTS (Coach creates content)
+// ============================================
+
+// POST /api/coach/posts - Create a new post
+router.post('/posts', postController.createPost);
+
+// GET /api/coach/posts - Get my posts
+router.get('/posts', postController.getMyPosts);
+
+// PUT /api/coach/posts/:postId - Update a post
+router.put('/posts/:postId', postController.updatePost);
+
+// DELETE /api/coach/posts/:postId - Delete a post
+router.delete('/posts/:postId', postController.deletePost);
+
+// POST /api/coach/posts/:postId/like - Like/unlike a post
+router.post('/posts/:postId/like', postController.likePost);
+
+// ============================================
+// SUBSCRIPTIONS (OF-style tiers)
+// ============================================
+
+// POST /api/coach/:coachId/subscribe - Subscribe to coach
+router.post('/:coachId/subscribe', coachSubscriptionController.subscribeToCoach);
+
+// GET /api/coach/:coachId/subscription - Get my subscription status
+router.get('/:coachId/subscription', coachSubscriptionController.getSubscription);
+
+// POST /api/coach/:coachId/unsubscribe - Cancel subscription
+router.post('/:coachId/unsubscribe', coachSubscriptionController.cancelSubscription);
+
+// GET /api/coach/subscribers - Get my subscribers (coach only)
+router.get('/subscribers', coachSubscriptionController.getMySubscribers);
+
+// GET /api/coach/applications - Get pending coaching applications
+router.get('/applications', coachSubscriptionController.getPendingApplications);
+
+// POST /api/coach/applications/:subscriptionId - Approve/reject application
+router.post('/applications/:subscriptionId', coachSubscriptionController.handleCoachingApplication);
+
+// ============================================
+// REVIEWS (Coaching clients only)
+// ============================================
+
+// POST /api/coach/:coachId/reviews - Create review
+router.post('/:coachId/reviews', reviewController.createReview);
+
+// GET /api/coach/:coachId/my-review - Get my review for this coach
+router.get('/:coachId/my-review', reviewController.getMyReview);
+
+// PUT /api/coach/:coachId/reviews - Update my review
+router.put('/:coachId/reviews', reviewController.updateReview);
+
+// DELETE /api/coach/:coachId/reviews - Delete my review
+router.delete('/:coachId/reviews', reviewController.deleteReview);
+
+// POST /api/coach/reviews/:reviewId/helpful - Mark review helpful
+router.post('/reviews/:reviewId/helpful', reviewController.markHelpful);
+
+// POST /api/coach/reviews/:reviewId/respond - Coach respond to review
+router.post('/reviews/:reviewId/respond', reviewController.respondToReview);
 
 module.exports = router;
