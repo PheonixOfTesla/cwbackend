@@ -160,6 +160,45 @@ const userSchema = new mongoose.Schema({
     },
 
     // ═══════════════════════════════════════════════════════════
+    // LINKS & AFFILIATE CODES (Linktree replacement)
+    // ═══════════════════════════════════════════════════════════
+    links: [{
+      title: { type: String, required: true, maxlength: 100 },
+      url: { type: String, required: true },
+      icon: { type: String, default: 'fa-link' },  // FontAwesome class
+      type: {
+        type: String,
+        enum: ['product', 'app', 'community', 'social', 'affiliate', 'other'],
+        default: 'other'
+      },
+      description: { type: String, maxlength: 200 },
+      isActive: { type: Boolean, default: true },
+      order: { type: Number, default: 0 }
+    }],
+
+    affiliateCodes: [{
+      brand: { type: String, required: true },
+      code: { type: String, required: true },
+      url: { type: String },
+      description: { type: String, maxlength: 200 }
+    }],
+
+    // ═══════════════════════════════════════════════════════════
+    // CONTENT CREATOR PROFILE (Twitter-style)
+    // ═══════════════════════════════════════════════════════════
+    handle: { type: String, sparse: true },  // @handle like Twitter
+    verified: { type: Boolean, default: false },
+    coverImage: { type: String },
+    stats: {
+      clientsCoached: { type: Number, default: 0 },
+      followers: { type: Number, default: 0 }
+    },
+    pricing: {
+      subscriptionPrice: { type: Number, default: 999 },  // $9.99 for content
+      coachingPrice: { type: Number, default: 14999 }     // $149.99 for 1:1
+    },
+
+    // ═══════════════════════════════════════════════════════════
     // PAYMENT METHODS (Direct peer-to-peer)
     // ═══════════════════════════════════════════════════════════
     paymentMethods: {

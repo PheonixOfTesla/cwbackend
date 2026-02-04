@@ -1088,4 +1088,268 @@ exports.getSessions = async (req, res) => {
   }
 };
 
+// ============================================
+// GET PUBLIC COACH PROFILE (No auth - for coach.html)
+// ============================================
+exports.getPublicProfile = async (req, res) => {
+  try {
+    const { coachId } = req.params;
+
+    const coach = await User.findById(coachId).select(
+      'name email coachProfile userType createdAt'
+    );
+
+    if (!coach || coach.userType !== 'coach') {
+      return res.status(404).json({
+        success: false,
+        message: 'Coach not found'
+      });
+    }
+
+    const profile = coach.coachProfile || {};
+
+    res.json({
+      success: true,
+      coach: {
+        _id: coach._id,
+        name: coach.name,
+        handle: profile.handle || null,
+        verified: profile.verified || false,
+        coverImage: profile.coverImage || null,
+        profilePicture: profile.profilePicture || null,
+        specialty: profile.specialty || '',
+        bio: profile.bio || '',
+        experienceYears: profile.experienceYears || 0,
+        certifications: profile.certifications || [],
+        stats: profile.stats || { clientsCoached: 0, followers: 0 },
+        pricing: profile.pricing || { subscriptionPrice: 999, coachingPrice: 14999 },
+        links: (profile.links || []).filter(l => l.isActive).sort((a, b) => a.order - b.order),
+        affiliateCodes: profile.affiliateCodes || [],
+        scheduling: profile.scheduling || {},
+        memberSince: coach.createdAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Get public profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get coach profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// GET COACH LINKS (Public - Linktree replacement)
+// ============================================
+exports.getCoachLinks = async (req, res) => {
+  try {
+    const { coachId } = req.params;
+
+    const coach = await User.findById(coachId).select('coachProfile.links coachProfile.affiliateCodes');
+
+    if (!coach) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coach not found'
+      });
+    }
+
+    const profile = coach.coachProfile || {};
+
+    res.json({
+      success: true,
+      links: (profile.links || []).filter(l => l.isActive).sort((a, b) => a.order - b.order),
+      affiliateCodes: profile.affiliateCodes || []
+    });
+
+  } catch (error) {
+    console.error('Get coach links error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get links',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE LINKS (Linktree replacement)
+// ============================================
+exports.updateLinks = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { links } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update links'
+      });
+    }
+
+    // Validate links array
+    if (!Array.isArray(links)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Links must be an array'
+      });
+    }
+
+    // Add order to each link if not present
+    const orderedLinks = links.map((link, index) => ({
+      ...link,
+      order: link.order !== undefined ? link.order : index
+    }));
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { 'coachProfile.links': orderedLinks } },
+      { new: true, runValidators: true }
+    ).select('coachProfile.links');
+
+    res.json({
+      success: true,
+      message: 'Links updated successfully',
+      links: user.coachProfile.links
+    });
+
+  } catch (error) {
+    console.error('Update links error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update links',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE AFFILIATE CODES
+// ============================================
+exports.updateAffiliateCodes = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { affiliateCodes } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update affiliate codes'
+      });
+    }
+
+    if (!Array.isArray(affiliateCodes)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Affiliate codes must be an array'
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { 'coachProfile.affiliateCodes': affiliateCodes } },
+      { new: true, runValidators: true }
+    ).select('coachProfile.affiliateCodes');
+
+    res.json({
+      success: true,
+      message: 'Affiliate codes updated successfully',
+      affiliateCodes: user.coachProfile.affiliateCodes
+    });
+
+  } catch (error) {
+    console.error('Update affiliate codes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update affiliate codes',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// UPDATE CREATOR PROFILE (handle, cover, pricing)
+// ============================================
+exports.updateCreatorProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { handle, coverImage, stats, pricing, verified } = req.body;
+
+    if (req.user.userType !== 'coach') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only coaches can update creator profile'
+      });
+    }
+
+    const updateData = {};
+
+    if (handle !== undefined) {
+      // Validate handle format (alphanumeric, underscores, 3-30 chars)
+      if (handle && !/^[a-zA-Z0-9_]{3,30}$/.test(handle)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Handle must be 3-30 characters, alphanumeric and underscores only'
+        });
+      }
+      updateData['coachProfile.handle'] = handle.toLowerCase();
+    }
+
+    if (coverImage !== undefined) {
+      updateData['coachProfile.coverImage'] = coverImage;
+    }
+
+    if (stats !== undefined) {
+      if (stats.clientsCoached !== undefined) {
+        updateData['coachProfile.stats.clientsCoached'] = stats.clientsCoached;
+      }
+      if (stats.followers !== undefined) {
+        updateData['coachProfile.stats.followers'] = stats.followers;
+      }
+    }
+
+    if (pricing !== undefined) {
+      if (pricing.subscriptionPrice !== undefined) {
+        updateData['coachProfile.pricing.subscriptionPrice'] = pricing.subscriptionPrice;
+      }
+      if (pricing.coachingPrice !== undefined) {
+        updateData['coachProfile.pricing.coachingPrice'] = pricing.coachingPrice;
+      }
+    }
+
+    // Note: verified status should only be set by admins in production
+    if (verified !== undefined) {
+      updateData['coachProfile.verified'] = verified;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('coachProfile.handle coachProfile.coverImage coachProfile.stats coachProfile.pricing coachProfile.verified');
+
+    res.json({
+      success: true,
+      message: 'Creator profile updated successfully',
+      profile: {
+        handle: user.coachProfile?.handle,
+        coverImage: user.coachProfile?.coverImage,
+        stats: user.coachProfile?.stats,
+        pricing: user.coachProfile?.pricing,
+        verified: user.coachProfile?.verified
+      }
+    });
+
+  } catch (error) {
+    console.error('Update creator profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update creator profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = exports;

@@ -15,6 +15,12 @@ const { coachInviteLimiter } = require('../middleware/rateLimiter');
 // GET /api/coach/list - Get all coaches (for signup)
 router.get('/list', coachController.getCoachesList);
 
+// GET /api/coach/:coachId/public - Get public coach profile (no auth)
+router.get('/:coachId/public', coachController.getPublicProfile);
+
+// GET /api/coach/:coachId/links - Get coach's public links (no auth)
+router.get('/:coachId/links', coachController.getCoachLinks);
+
 // GET /api/coach/:coachId/reviews - Get coach reviews (public)
 router.get('/:coachId/reviews', reviewController.getCoachReviews);
 
@@ -92,6 +98,19 @@ router.put('/scheduling', coachController.updateScheduling);
 
 // PUT /api/coach/payment-methods - Update payment methods
 router.put('/payment-methods', coachController.updatePaymentMethods);
+
+// ============================================
+// LINKS MANAGEMENT (Linktree replacement)
+// ============================================
+
+// PUT /api/coach/links - Update all links
+router.put('/links', coachController.updateLinks);
+
+// PUT /api/coach/affiliate-codes - Update affiliate codes
+router.put('/affiliate-codes', coachController.updateAffiliateCodes);
+
+// PUT /api/coach/creator-profile - Update handle, cover, pricing
+router.put('/creator-profile', coachController.updateCreatorProfile);
 
 // GET /api/coach/:coachId/availability - Get coach availability (public)
 router.get('/:coachId/availability', coachController.getAvailability);
