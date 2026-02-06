@@ -1,7 +1,7 @@
 // Src/routes/earnings.js - Earnings & Referral Routes
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../config/auth');
+const { protect } = require('../middleware/auth');
 const earningsController = require('../controllers/earningsController');
 
 // ═══════════════════════════════════════════════════════════
@@ -19,13 +19,13 @@ router.post('/track/click/:code', earningsController.trackClick);
 // ═══════════════════════════════════════════════════════════
 
 // Get earnings summary (dashboard data)
-router.get('/summary', requireAuth, earningsController.getSummary);
+router.get('/summary', protect, earningsController.getSummary);
 
 // Get referral code
-router.get('/referral-code', requireAuth, earningsController.getReferralCode);
+router.get('/referral-code', protect, earningsController.getReferralCode);
 
 // Get referrals list
-router.get('/referrals', requireAuth, earningsController.getReferrals);
+router.get('/referrals', protect, earningsController.getReferrals);
 
 // Track signup (called during registration)
 router.post('/track/signup', earningsController.trackSignup);
@@ -38,23 +38,23 @@ router.post('/track/conversion', earningsController.trackConversion);
 // ═══════════════════════════════════════════════════════════
 
 // Start Stripe Connect onboarding
-router.post('/stripe/connect', requireAuth, earningsController.startStripeOnboarding);
+router.post('/stripe/connect', protect, earningsController.startStripeOnboarding);
 
 // Get Stripe Connect status
-router.get('/stripe/status', requireAuth, earningsController.getStripeStatus);
+router.get('/stripe/status', protect, earningsController.getStripeStatus);
 
 // ═══════════════════════════════════════════════════════════
 // PAYOUT ROUTES
 // ═══════════════════════════════════════════════════════════
 
 // Request a payout
-router.post('/payout', requireAuth, earningsController.requestPayout);
+router.post('/payout', protect, earningsController.requestPayout);
 
 // Get payout history
-router.get('/payouts', requireAuth, earningsController.getPayoutHistory);
+router.get('/payouts', protect, earningsController.getPayoutHistory);
 
 // Update payout preferences
-router.put('/payout-preferences', requireAuth, earningsController.updatePayoutPreferences);
+router.put('/payout-preferences', protect, earningsController.updatePayoutPreferences);
 
 // ═══════════════════════════════════════════════════════════
 // LEADERBOARD
