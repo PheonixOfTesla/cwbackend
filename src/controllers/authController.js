@@ -1,6 +1,7 @@
 // Src/controllers/authController.js - ClockWork B2C/B2B Auth Controller
 const User = require('../models/User');
 const AICoach = require('../models/AICoach');
+const Earnings = require('../models/Earnings');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -124,6 +125,19 @@ exports.register = async (req, res) => {
         // Create AI Coach profile for individuals and clients
         if (finalUserType === 'individual' || finalUserType === 'client') {
             await AICoach.create({ user: user._id });
+        }
+
+        // Generate referral code for new user (PATF system)
+        try {
+            const referralCode = await Earnings.generateReferralCode(name);
+            await Earnings.create({
+                user: user._id,
+                earnerType: finalUserType === 'coach' ? 'coach' : 'referrer',
+                referralCode
+            });
+            console.log(`🎯 Referral code generated: ${referralCode}`);
+        } catch (err) {
+            console.error('Referral code generation failed:', err.message);
         }
 
         // Generate token
