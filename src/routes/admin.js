@@ -27,6 +27,16 @@ router.get('/influencer-applications', adminController.getInfluencerApplications
 router.post('/influencer-applications/:id/approve', adminController.approveInfluencerApplication);
 router.post('/influencer-applications/:id/deny', adminController.denyInfluencerApplication);
 
+// Earnings Management
+router.get('/earnings', adminController.getEarnings);
+router.get('/earnings/summary', adminController.getEarningsSummary);
+
+// Coach Management
+router.get('/coach-applications', adminController.getCoachApplications);
+router.post('/coach-applications/:userId/approve', adminController.approveCoach);
+router.post('/coach-applications/:userId/reject', adminController.rejectCoach);
+router.get('/coaches/income', adminController.getCoachIncome);
+
 // Documentation
 router.get('/docs', (req, res) => {
   res.json({

@@ -4,6 +4,9 @@ const Workout = require('../models/Workout');
 const Program = require('../models/Program');
 const InfluencerApplication = require('../models/InfluencerApplication');
 const Influencer = require('../models/Influencer');
+const CoachSubscription = require('../models/CoachSubscription');
+const CoachClient = require('../models/CoachClient');
+const Earnings = require('../models/Earnings');
 const crypto = require('crypto');
 const { sendInfluencerApprovalEmail, sendInfluencerDenialEmail, sendNewInfluencerWelcomeEmail } = require('../utils/email');
 const { getVIPEmails } = require('../middleware/adminAuth');
@@ -452,13 +455,480 @@ const denyInfluencerApplication = async (req, res) => {
 
         // Send denial email
         await sendInfluencerDenialEmail(application.email, application.name, reason);
-        
+
         res.json({ success: true, message: 'Influencer application denied.' });
 
     } catch (error) {
         console.error('Admin denyInfluencerApplication error:', error);
         res.status(500).json({ success: false, message: 'Server error while denying application.' });
     }
+};
+
+// GET /api/admin/earnings - Fetch all earnings records with pagination
+const getEarnings = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Execute query
+    const [earnings, total] = await Promise.all([
+      Earnings.find({})
+        .populate('user', 'email name userType')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Earnings.countDocuments({})
+    ]);
+
+    res.json({
+      success: true,
+      earnings,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Admin getEarnings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch earnings',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/admin/earnings/summary - Calculate earnings summary statistics
+const getEarningsSummary = async (req, res) => {
+  try {
+    // Aggregate total earnings, referrals, and conversions across all users
+    const summary = await Earnings.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalEarnings: { $sum: '$lifetime.total' },
+          totalReferrals: { $sum: '$stats.signups' },
+          totalConversions: { $sum: '$stats.conversions' }
+        }
+      }
+    ]);
+
+    // If no earnings exist, return zeros
+    const result = summary.length > 0 ? summary[0] : {
+      totalEarnings: 0,
+      totalReferrals: 0,
+      totalConversions: 0
+    };
+
+    res.json({
+      success: true,
+      summary: {
+        totalEarnings: result.totalEarnings || 0,
+        totalReferrals: result.totalReferrals || 0,
+        totalConversions: result.totalConversions || 0
+      }
+    });
+  } catch (error) {
+    console.error('Admin getEarningsSummary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch earnings summary',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/admin/coaches/applications - List coach applications
+const getCoachApplications = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+
+    // Build query for coaches with unverified profiles
+    const query = {
+      userType: 'coach'
+    };
+
+    // Filter by verification status if provided
+    if (status === 'pending') {
+      query['coachProfile.verified'] = false;
+    } else if (status === 'approved') {
+      query['coachProfile.verified'] = true;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [applications, total] = await Promise.all([
+      User.find(query)
+        .select('name email coachProfile.specialty coachProfile.bio coachProfile.verified coachProfile.experienceYears createdAt')
+        .sort({ createdAt: 'desc' })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      User.countDocuments(query)
+    ]);
+
+    console.log(`Admin getCoachApplications: Found ${total} applications (status: ${status || 'all'})`);
+
+    res.json({
+      success: true,
+      data: {
+        applications,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Admin getCoachApplications error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch coach applications.',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/admin/coaches/:userId/approve - Approve coach application
+const approveCoach = async (req, res) => {
+  const { userId } = req.params;
+  try {
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    // Verify user is a coach
+    if (user.userType !== 'coach') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not a coach.'
+      });
+    }
+
+    // Check if already verified
+    if (user.coachProfile?.verified === true) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coach is already verified.'
+      });
+    }
+
+    // Initialize coachProfile if it doesn't exist
+    if (!user.coachProfile) {
+      user.coachProfile = {};
+    }
+
+    // Set verified to true
+    user.coachProfile.verified = true;
+    await user.save();
+
+    console.log(`Admin approveCoach: Approved coach ${user.email} (ID: ${userId})`);
+
+    // TODO: Send approval email when coach email templates are created
+    // await sendCoachApprovalEmail(user.email, user.name);
+
+    res.json({
+      success: true,
+      message: 'Coach application approved successfully.',
+      data: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        verified: user.coachProfile.verified
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin approveCoach error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while approving coach.',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/admin/coaches/:userId/reject - Reject coach application
+const rejectCoach = async (req, res) => {
+  const { userId } = req.params;
+  const { reason } = req.body;
+  try {
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      });
+    }
+
+    // Verify user is a coach
+    if (user.userType !== 'coach') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not a coach.'
+      });
+    }
+
+    // Check if already rejected
+    if (user.coachProfile?.verified === false && user.coachProfile?.rejectionReason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coach application has already been rejected.'
+      });
+    }
+
+    // Initialize coachProfile if it doesn't exist
+    if (!user.coachProfile) {
+      user.coachProfile = {};
+    }
+
+    // Set verified to false and store rejection reason
+    user.coachProfile.verified = false;
+    if (reason) {
+      user.coachProfile.rejectionReason = reason;
+    }
+    await user.save();
+
+    console.log(`Admin rejectCoach: Rejected coach ${user.email} (ID: ${userId})${reason ? ` - Reason: ${reason}` : ''}`);
+
+    // TODO: Send rejection email when coach email templates are created
+    // await sendCoachRejectionEmail(user.email, user.name, reason);
+
+    res.json({
+      success: true,
+      message: 'Coach application rejected.',
+      data: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        verified: user.coachProfile.verified,
+        reason: reason || null
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin rejectCoach error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while rejecting coach.',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/admin/coaches/income - Get income statistics for all coaches
+const getCoachIncome = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      sortBy = 'totalIncome',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Find all verified coaches
+    const coaches = await User.find({
+      userType: 'coach',
+      'coachProfile.verified': true
+    })
+      .select('name email coachProfile.profilePicture coachProfile.specialty')
+      .lean();
+
+    if (coaches.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          coaches: [],
+          summary: {
+            totalCoaches: 0,
+            totalIncome: 0,
+            totalClients: 0,
+            totalSubscribers: 0,
+            averageIncome: 0
+          },
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            pages: 0
+          }
+        }
+      });
+    }
+
+    // Get coach IDs
+    const coachIds = coaches.map(coach => coach._id);
+
+    // Fetch income data in parallel
+    const [subscriptionStats, clientCounts, earningsData] = await Promise.all([
+      // Get subscription stats (CoachSubscription model)
+      CoachSubscription.aggregate([
+        {
+          $match: {
+            coachId: { $in: coachIds },
+            status: 'active',
+            coachApproved: true
+          }
+        },
+        {
+          $group: {
+            _id: '$coachId',
+            contentSubscribers: {
+              $sum: { $cond: [{ $eq: ['$tier', 'content'] }, 1, 0] }
+            },
+            coachingClients: {
+              $sum: { $cond: [{ $eq: ['$tier', 'coaching'] }, 1, 0] }
+            },
+            monthlyRecurring: { $sum: '$price' },
+            totalEarned: { $sum: '$totalPaid' }
+          }
+        }
+      ]),
+
+      // Get direct client counts (CoachClient model)
+      CoachClient.aggregate([
+        {
+          $match: {
+            coach: { $in: coachIds },
+            status: 'active'
+          }
+        },
+        {
+          $group: {
+            _id: '$coach',
+            directClients: { $sum: 1 }
+          }
+        }
+      ]),
+
+      // Get earnings data (Earnings model)
+      Earnings.find({
+        user: { $in: coachIds },
+        earnerType: 'coach'
+      })
+        .select('user lifetime.fromCoaching lifetime.total balance.available')
+        .lean()
+    ]);
+
+    // Create lookup maps
+    const subscriptionMap = new Map();
+    subscriptionStats.forEach(stat => {
+      subscriptionMap.set(stat._id.toString(), stat);
+    });
+
+    const clientMap = new Map();
+    clientCounts.forEach(count => {
+      clientMap.set(count._id.toString(), count.directClients);
+    });
+
+    const earningsMap = new Map();
+    earningsData.forEach(earning => {
+      earningsMap.set(earning.user.toString(), earning);
+    });
+
+    // Combine data for each coach
+    const coachesWithIncome = coaches.map(coach => {
+      const coachId = coach._id.toString();
+      const subscriptionData = subscriptionMap.get(coachId) || {
+        contentSubscribers: 0,
+        coachingClients: 0,
+        monthlyRecurring: 0,
+        totalEarned: 0
+      };
+      const directClients = clientMap.get(coachId) || 0;
+      const earningsData = earningsMap.get(coachId) || {
+        lifetime: { fromCoaching: 0, total: 0 },
+        balance: { available: 0 }
+      };
+
+      // Calculate total income (from subscriptions + direct coaching earnings)
+      const totalIncome = subscriptionData.totalEarned + earningsData.lifetime.fromCoaching;
+
+      // Total subscribers count
+      const totalSubscribers = subscriptionData.contentSubscribers + subscriptionData.coachingClients;
+
+      // Total clients (subscription coaching + direct clients)
+      const totalClients = subscriptionData.coachingClients + directClients;
+
+      return {
+        id: coach._id,
+        name: coach.name,
+        email: coach.email,
+        specialty: coach.coachProfile?.specialty || '',
+        profilePicture: coach.coachProfile?.profilePicture || '',
+        totalIncome: Math.round(totalIncome / 100), // Convert cents to dollars
+        monthlyRecurring: Math.round(subscriptionData.monthlyRecurring / 100),
+        clients: totalClients,
+        subscribers: totalSubscribers,
+        contentSubscribers: subscriptionData.contentSubscribers,
+        coachingClients: subscriptionData.coachingClients,
+        directClients: directClients,
+        lifetimeEarnings: Math.round(earningsData.lifetime.total / 100),
+        availableBalance: Math.round(earningsData.balance.available / 100)
+      };
+    });
+
+    // Sort coaches
+    const sortField = sortBy === 'totalIncome' ? 'totalIncome'
+                    : sortBy === 'clients' ? 'clients'
+                    : sortBy === 'subscribers' ? 'subscribers'
+                    : sortBy === 'monthlyRecurring' ? 'monthlyRecurring'
+                    : 'totalIncome';
+
+    const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
+    coachesWithIncome.sort((a, b) => {
+      return (a[sortField] - b[sortField]) * sortMultiplier;
+    });
+
+    // Pagination
+    const total = coachesWithIncome.length;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedCoaches = coachesWithIncome.slice(skip, skip + parseInt(limit));
+
+    // Calculate summary stats
+    const summary = {
+      totalCoaches: total,
+      totalIncome: coachesWithIncome.reduce((sum, c) => sum + c.totalIncome, 0),
+      totalClients: coachesWithIncome.reduce((sum, c) => sum + c.clients, 0),
+      totalSubscribers: coachesWithIncome.reduce((sum, c) => sum + c.subscribers, 0),
+      averageIncome: total > 0 ? Math.round(coachesWithIncome.reduce((sum, c) => sum + c.totalIncome, 0) / total) : 0
+    };
+
+    res.json({
+      success: true,
+      data: {
+        coaches: paginatedCoaches,
+        summary,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin getCoachIncome error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch coach income data',
+      error: error.message
+    });
+  }
 };
 
 module.exports = {
@@ -469,5 +939,11 @@ module.exports = {
   getVIPUsers,
   getInfluencerApplications,
   approveInfluencerApplication,
-  denyInfluencerApplication
+  denyInfluencerApplication,
+  getEarnings,
+  getEarningsSummary,
+  getCoachApplications,
+  approveCoach,
+  rejectCoach,
+  getCoachIncome
 };
