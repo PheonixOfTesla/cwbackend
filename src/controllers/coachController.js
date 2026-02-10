@@ -1095,14 +1095,25 @@ exports.getPublicProfile = async (req, res) => {
   try {
     const { coachId } = req.params;
 
-    const coach = await User.findById(coachId).select(
-      'name email coachProfile userType createdAt'
-    );
+    // Support lookup by handle OR by MongoDB ID
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(coachId);
 
-    if (!coach || coach.userType !== 'coach') {
+    let coach;
+    if (isObjectId) {
+      coach = await User.findById(coachId).select('name email coachProfile userType createdAt');
+    }
+
+    // If not found by ID, try by handle
+    if (!coach) {
+      coach = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('name email coachProfile userType createdAt');
+    }
+
+    // Allow coaches OR users with coachProfile (creators)
+    if (!coach || (!coach.coachProfile && coach.userType !== 'coach')) {
       return res.status(404).json({
         success: false,
-        message: 'Coach not found'
+        message: 'Creator not found'
       });
     }
 

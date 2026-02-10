@@ -51,9 +51,19 @@ exports.createPost = async (req, res) => {
 // ============================================
 exports.getCoachFeed = async (req, res) => {
   try {
-    const { coachId } = req.params;
+    let { coachId } = req.params;
     const { page = 1, limit = 20 } = req.query;
     const userId = req.user?.id;
+
+    // Resolve handle to ID if needed
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(coachId)) {
+      const creator = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('_id');
+      if (!creator) {
+        return res.status(404).json({ success: false, message: 'Creator not found' });
+      }
+      coachId = creator._id;
+    }
 
     // Check subscription status
     let userTier = null;
