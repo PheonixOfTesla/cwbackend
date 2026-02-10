@@ -90,9 +90,9 @@ exports.getCoachProfile = async (req, res) => {
 exports.updateCoachProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { specialty, bio, experienceYears, certifications } = req.body;
+    const { specialty, bio, experienceYears, certifications, coachProfile } = req.body;
 
-    if (req.user.userType !== 'coach') {
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can update profile'
@@ -100,10 +100,41 @@ exports.updateCoachProfile = async (req, res) => {
     }
 
     const updateData = {};
+
+    // Handle individual field updates (legacy support)
     if (specialty !== undefined) updateData['coachProfile.specialty'] = specialty;
     if (bio !== undefined) updateData['coachProfile.bio'] = bio;
     if (experienceYears !== undefined) updateData['coachProfile.experienceYears'] = experienceYears;
     if (certifications !== undefined) updateData['coachProfile.certifications'] = certifications;
+
+    // Handle nested coachProfile object updates (new approach)
+    if (coachProfile) {
+      if (coachProfile.handle !== undefined) {
+        // Validate handle format
+        const handle = coachProfile.handle.toLowerCase();
+        if (!/^[a-z0-9_]+$/.test(handle)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Handle can only contain lowercase letters, numbers, and underscores'
+          });
+        }
+        // Check if handle is already taken
+        const existing = await User.findOne({
+          'coachProfile.handle': handle,
+          _id: { $ne: userId }
+        });
+        if (existing) {
+          return res.status(400).json({
+            success: false,
+            message: 'This username is already taken'
+          });
+        }
+        updateData['coachProfile.handle'] = handle;
+      }
+      if (coachProfile.profilePicture !== undefined) updateData['coachProfile.profilePicture'] = coachProfile.profilePicture;
+      if (coachProfile.bio !== undefined) updateData['coachProfile.bio'] = coachProfile.bio;
+      if (coachProfile.specialty !== undefined) updateData['coachProfile.specialty'] = coachProfile.specialty;
+    }
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -169,6 +200,61 @@ exports.uploadProfilePicture = async (req, res) => {
       success: false,
       message: 'Failed to upload profile picture',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ============================================
+// CHECK HANDLE AVAILABILITY
+// ============================================
+exports.checkHandleAvailability = async (req, res) => {
+  try {
+    const { handle } = req.params;
+    const userId = req.user.id;
+
+    if (!handle || handle.length < 3) {
+      return res.json({
+        success: false,
+        available: false,
+        message: 'Handle must be at least 3 characters'
+      });
+    }
+
+    // Check if handle is alphanumeric and lowercase
+    if (!/^[a-z0-9_]+$/.test(handle.toLowerCase())) {
+      return res.json({
+        success: false,
+        available: false,
+        message: 'Handle can only contain lowercase letters, numbers, and underscores'
+      });
+    }
+
+    // Check if handle is already taken by another user
+    const existingUser = await User.findOne({
+      'coachProfile.handle': handle.toLowerCase(),
+      _id: { $ne: userId } // Exclude current user
+    });
+
+    if (existingUser) {
+      return res.json({
+        success: true,
+        available: false,
+        message: 'This username is already taken'
+      });
+    }
+
+    res.json({
+      success: true,
+      available: true,
+      message: 'Username is available'
+    });
+
+  } catch (error) {
+    console.error('Check handle availability error:', error);
+    res.status(500).json({
+      success: false,
+      available: false,
+      message: 'Failed to check handle availability'
     });
   }
 };

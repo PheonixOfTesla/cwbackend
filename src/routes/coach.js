@@ -47,6 +47,9 @@ router.put('/profile', coachController.updateCoachProfile);
 // POST /api/coach/profile/picture - Upload profile picture
 router.post('/profile/picture', coachController.uploadProfilePicture);
 
+// GET /api/coach/check-handle/:handle - Check if username/handle is available
+router.get('/check-handle/:handle', coachController.checkHandleAvailability);
+
 // ============================================
 // COACH DASHBOARD
 // ============================================
