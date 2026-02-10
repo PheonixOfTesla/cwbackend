@@ -9,6 +9,25 @@ const {
     uploadProfilePicture
 } = require('../controllers/uploadController');
 
+// Test endpoint to check Cloudinary configuration (no auth required for debugging)
+router.get('/test-cloudinary', (req, res) => {
+    const configured = !!(
+        process.env.CLOUDINARY_CLOUD_NAME &&
+        process.env.CLOUDINARY_API_KEY &&
+        process.env.CLOUDINARY_API_SECRET
+    );
+
+    res.json({
+        success: true,
+        cloudinary: {
+            configured: configured,
+            cloudName: process.env.CLOUDINARY_CLOUD_NAME ? '✅ Set' : '❌ Missing',
+            apiKey: process.env.CLOUDINARY_API_KEY ? '✅ Set' : '❌ Missing',
+            apiSecret: process.env.CLOUDINARY_API_SECRET ? '✅ Set' : '❌ Missing'
+        }
+    });
+});
+
 // All upload routes require authentication
 router.use(protect);
 
