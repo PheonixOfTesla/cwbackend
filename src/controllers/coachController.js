@@ -51,10 +51,11 @@ exports.getCoachProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    if (req.user.userType !== 'coach') {
+    // Allow coaches and influencers (both are creators)
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can access this endpoint'
+        message: 'Only coaches and influencers can access this endpoint'
       });
     }
 
@@ -94,7 +95,7 @@ exports.updateCoachProfile = async (req, res) => {
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can update coach profile'
+        message: 'Only coaches and influencers can update profile'
       });
     }
 
@@ -137,7 +138,7 @@ exports.uploadProfilePicture = async (req, res) => {
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can upload profile pictures'
+        message: 'Only coaches and influencers can upload profile pictures'
       });
     }
 
@@ -180,10 +181,11 @@ exports.getMyClients = async (req, res) => {
     const coachId = req.user.id;
 
     // Verify user is a coach
-    if (req.user.userType !== 'coach') {
+    // Allow coaches and influencers (both are creators)
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can access this endpoint'
+        message: 'Only coaches and influencers can access this endpoint'
       });
     }
 
@@ -1040,10 +1042,11 @@ exports.getSessions = async (req, res) => {
     const coachId = req.user.id;
     const { status, from, to } = req.query;
 
-    if (req.user.userType !== 'coach') {
+    // Allow coaches and influencers (both are creators)
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can access this endpoint'
+        message: 'Only coaches and influencers can access this endpoint'
       });
     }
 
@@ -1196,7 +1199,7 @@ exports.updateLinks = async (req, res) => {
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can update links'
+        message: 'Only coaches and influencers can update links'
       });
     }
 
@@ -1247,7 +1250,7 @@ exports.updateAffiliateCodes = async (req, res) => {
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can update affiliate codes'
+        message: 'Only coaches and influencers can update affiliate codes'
       });
     }
 
@@ -1291,7 +1294,7 @@ exports.updateCreatorProfile = async (req, res) => {
     if (req.user.userType !== 'coach') {
       return res.status(403).json({
         success: false,
-        message: 'Only coaches can update creator profile'
+        message: 'Only coaches and influencers can update creator profile'
       });
     }
 
