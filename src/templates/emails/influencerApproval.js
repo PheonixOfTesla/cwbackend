@@ -5,14 +5,14 @@ const influencerApprovalTemplate = (name, affiliateCode, accountSetupUrl) => {
     <html>
     <head>
         <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0a0a0a; color: #e5e5e5; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0a0a0a; color: #ffffff; }
             .container { max-width: 600px; margin: 20px auto; padding: 20px; background-color: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 12px; }
             .header { text-align: center; margin-bottom: 20px; }
             .header h1 { color: #f97316; }
-            .content { line-height: 1.6; }
+            .content { line-height: 1.6; color: #ffffff; }
             .button { display: inline-block; background-color: #f97316; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-            .code { background: #2a2a3e; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 18px; letter-spacing: 2px; }
-            .footer { margin-top: 30px; text-align: center; color: #888888; font-size: 12px; }
+            .code { background: #2a2a3e; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 18px; letter-spacing: 2px; color: #f97316; }
+            .footer { margin-top: 30px; text-align: center; color: #aaaaaa; font-size: 12px; }
         </style>
     </head>
     <body>
@@ -40,7 +40,7 @@ const influencerApprovalTemplate = (name, affiliateCode, accountSetupUrl) => {
                     <a href="${accountSetupUrl}" class="button">Create My Creator Account</a>
                 </div>
 
-                <p style="margin-top: 20px; font-size: 14px; color: #888;">
+                <p style="margin-top: 20px; font-size: 14px; color: #cccccc;">
                     <strong>Note:</strong> This link expires in 7 days. If it expires, contact support for a new invitation.
                 </p>
 
