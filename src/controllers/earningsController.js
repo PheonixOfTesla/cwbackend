@@ -250,8 +250,8 @@ exports.startStripeOnboarding = async (req, res) => {
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: earnings.stripe.accountId,
-      refresh_url: `${process.env.FRONTEND_URL}/settings?stripe=refresh`,
-      return_url: `${process.env.FRONTEND_URL}/settings?stripe=success`,
+      refresh_url: `${process.env.FRONTEND_URL}/creator-studio?stripe=refresh`,
+      return_url: `${process.env.FRONTEND_URL}/creator-studio?stripe=success`,
       type: 'account_onboarding'
     });
 
