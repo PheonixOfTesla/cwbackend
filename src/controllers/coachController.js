@@ -1,4 +1,5 @@
 // Src/controllers/coachController.js - Coach Management Controller
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const CoachClient = require('../models/CoachClient');
 const Workout = require('../models/Workout');
@@ -1096,7 +1097,6 @@ exports.getPublicProfile = async (req, res) => {
     const { coachId } = req.params;
 
     // Support lookup by handle OR by MongoDB ID
-    const mongoose = require('mongoose');
     const isObjectId = mongoose.Types.ObjectId.isValid(coachId);
 
     let coach;

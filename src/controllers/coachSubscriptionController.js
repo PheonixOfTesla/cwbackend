@@ -1,4 +1,5 @@
 // Src/controllers/coachSubscriptionController.js - OF-style Coach Subscriptions
+const mongoose = require('mongoose');
 const CoachSubscription = require('../models/CoachSubscription');
 const User = require('../models/User');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -20,7 +21,6 @@ exports.subscribeToCoach = async (req, res) => {
     }
 
     // Resolve handle to ID if needed
-    const mongoose = require('mongoose');
     if (!mongoose.Types.ObjectId.isValid(coachId)) {
       const creator = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('_id');
       if (!creator) {

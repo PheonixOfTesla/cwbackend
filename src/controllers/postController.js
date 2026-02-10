@@ -1,4 +1,5 @@
 // Src/controllers/postController.js - Coach Content Posts (OF-style)
+const mongoose = require('mongoose');
 const Post = require('../models/Post');
 const CoachSubscription = require('../models/CoachSubscription');
 const User = require('../models/User');
@@ -56,7 +57,6 @@ exports.getCoachFeed = async (req, res) => {
     const userId = req.user?.id;
 
     // Resolve handle to ID if needed
-    const mongoose = require('mongoose');
     if (!mongoose.Types.ObjectId.isValid(coachId)) {
       const creator = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('_id');
       if (!creator) {

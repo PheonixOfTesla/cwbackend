@@ -15,10 +15,22 @@ exports.apply = async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields.' });
     }
 
+    // Normalize platform to match enum (case-insensitive)
+    const platformMap = {
+      'tiktok': 'TikTok',
+      'instagram': 'Instagram',
+      'youtube': 'YouTube',
+      'twitter': 'Twitter/X',
+      'twitter/x': 'Twitter/X',
+      'x': 'Twitter/X',
+      'other': 'Other'
+    };
+    const normalizedPlatform = platformMap[platform.toLowerCase()] || platform;
+
     const newApplication = new InfluencerApplication({
       name,
       email,
-      platform,
+      platform: normalizedPlatform,
       followerCount,
       engagementRate,
       videoLinks
