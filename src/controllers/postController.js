@@ -12,8 +12,10 @@ exports.createPost = async (req, res) => {
     const coachId = req.user.id;
     const { content, mediaUrl, mediaType, postType, visibility, linkedProductId } = req.body;
 
-    if (req.user.userType !== 'coach') {
-      return res.status(403).json({ success: false, message: 'Only coaches can create posts' });
+    // Allow coaches OR users with coachProfile (creators/influencers)
+    const canPost = req.user.userType === 'coach' || req.user.coachProfile;
+    if (!canPost) {
+      return res.status(403).json({ success: false, message: 'Only creators can create posts' });
     }
 
     if (!content || content.trim().length === 0) {
@@ -116,8 +118,9 @@ exports.getMyPosts = async (req, res) => {
     const coachId = req.user.id;
     const { page = 1, limit = 20 } = req.query;
 
-    if (req.user.userType !== 'coach') {
-      return res.status(403).json({ success: false, message: 'Only coaches can access this' });
+    const canAccess = req.user.userType === 'coach' || req.user.coachProfile;
+    if (!canAccess) {
+      return res.status(403).json({ success: false, message: 'Only creators can access this' });
     }
 
     const posts = await Post.find({ coachId })
