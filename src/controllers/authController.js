@@ -976,7 +976,7 @@ exports.creatorSignup = async (req, res) => {
             email: application.email,
             password: password, // Will be hashed by pre-save hook
             name: application.name,
-            userType: 'individual',
+            userType: 'influencer',
             emailVerified: true, // Auto-verify since admin approved
             coachProfile: {
                 verified: false,
