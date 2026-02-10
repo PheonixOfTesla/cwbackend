@@ -167,7 +167,6 @@ exports.register = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Welcome! Your 24-hour Pro trial has started.',
-            token,
             user: {
                 _id: user._id,
                 name: user.name,
@@ -436,7 +435,6 @@ async function completeLogin(user, res) {
     return res.json({
         success: true,
         message: 'Login successful',
-        token,
         user: {
             _id: user._id,
             name: user.name,
@@ -1025,10 +1023,17 @@ exports.creatorSignup = async (req, res) => {
 
         console.log(`✅ Creator account created for: ${user.email}`);
 
+        // Set HTTP-only cookie
+        res.cookie('token', authToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
         res.json({
             success: true,
             message: 'Account created successfully',
-            token: authToken,
             user: {
                 id: user._id,
                 email: user.email,
