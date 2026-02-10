@@ -9,9 +9,15 @@ const User = require('../models/User');
 const protect = async (req, res, next) => {
     let token;
 
+    // Check Authorization header first, then cookies
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+    }
+
+    if (token) {
         try {
-            token = req.headers.authorization.split(' ')[1];
 
             // SECURITY: No fallback - JWT_SECRET must be set
             const secret = process.env.JWT_SECRET;

@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 const { createServer } = require('http');
 const socketIO = require('socket.io');
 require('dotenv').config();
@@ -146,6 +147,7 @@ app.use(compression());
 app.use(morgan(isDevelopment ? 'dev' : 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 app.use((req, res, next) => {
     console.log(`🔥 ${req.method} ${req.path} from ${req.ip}`);

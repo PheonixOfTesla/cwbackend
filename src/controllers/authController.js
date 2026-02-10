@@ -156,6 +156,14 @@ exports.register = async (req, res) => {
             console.error('Welcome email failed:', err.message);
         });
 
+        // Set HTTP-only cookie
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
         res.status(201).json({
             success: true,
             message: 'Welcome! Your 24-hour Pro trial has started.',
@@ -416,6 +424,14 @@ async function completeLogin(user, res) {
     const trialHoursRemaining = user.getTrialRemainingHours();
 
     console.log(`✅ Login successful for ${user.userType}: ${user.email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
+
+    // Set HTTP-only cookie
+    res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
 
     return res.json({
         success: true,
