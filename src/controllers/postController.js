@@ -2,6 +2,7 @@
 const Post = require('../models/Post');
 const CoachSubscription = require('../models/CoachSubscription');
 const User = require('../models/User');
+const { uploadImage, uploadVideo } = require('../config/cloudinary');
 
 // ============================================
 // CREATE POST (Coach only)

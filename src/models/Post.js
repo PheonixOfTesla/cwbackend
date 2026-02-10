@@ -17,7 +17,7 @@ const postSchema = new mongoose.Schema({
     maxlength: 2000
   },
 
-  // Media attachment (optional)
+  // Media attachment (single or carousel)
   mediaUrl: {
     type: String,
     default: null
@@ -25,9 +25,23 @@ const postSchema = new mongoose.Schema({
 
   mediaType: {
     type: String,
-    enum: ['image', 'video', 'none'],
+    enum: ['image', 'video', 'carousel', 'none'],
     default: 'none'
   },
+
+  // Cloudinary public ID for deletion
+  mediaPublicId: {
+    type: String,
+    default: null
+  },
+
+  // For carousel posts (multiple images)
+  carousel: [{
+    url: String,
+    publicId: String,
+    width: Number,
+    height: Number
+  }],
 
   // Post type for filtering
   postType: {

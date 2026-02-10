@@ -380,43 +380,50 @@ const approveInfluencerApplication = async (req, res) => {
         }
 
         // Check if user already exists
-        let user = await User.findOne({ email: application.email });
-
-        // If user doesn't exist, create a new one
-        if (!user) {
-            const tempPassword = crypto.randomBytes(8).toString('hex');
-            user = new User({
-                name: application.name,
-                email: application.email,
-                password: tempPassword,
-                userType: 'individual', // Or another default
+        const existingUser = await User.findOne({ email: application.email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'A user with this email already exists. They should sign in at /influencer instead.'
             });
-            await user.save();
-            // Email user their temporary password
-            await sendNewInfluencerWelcomeEmail(user.email, user.name, tempPassword);
         }
 
-        // Generate a unique affiliate code
-        const affiliateCode = `${application.name.split(' ')[0].toLowerCase()}${crypto.randomBytes(3).toString('hex')}`;
+        // Generate approval token (valid for 7 days)
+        const approvalToken = crypto.randomBytes(32).toString('hex');
+        const approvalTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        const newInfluencer = new Influencer({
-            user: user._id,
-            application: application._id,
-            affiliateCode,
-        });
+        // Generate affiliate code
+        const affiliateCode = `${application.name.split(' ')[0].toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 
-        await newInfluencer.save();
-
+        // Update application
         application.status = 'approved';
+        application.approvalToken = approvalToken;
+        application.approvalTokenExpires = approvalTokenExpires;
+        application.approvedAt = new Date();
+        application.approvedBy = req.user?.id || null;
+        application.affiliateCode = affiliateCode;
         await application.save();
-        
-        // Send approval email
-        await sendInfluencerApprovalEmail(user.email, user.name, newInfluencer.affiliateCode);
+
+        // Send approval email with account creation link
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const accountSetupUrl = `${frontendUrl}/influencer?token=${approvalToken}`;
+
+        await sendInfluencerApprovalEmail(
+            application.email,
+            application.name,
+            affiliateCode,
+            accountSetupUrl
+        );
 
         res.json({
             success: true,
-            message: 'Influencer application approved.',
-            data: { influencer: newInfluencer, user }
+            message: 'Application approved and email sent with account setup link.',
+            data: {
+                email: application.email,
+                name: application.name,
+                affiliateCode,
+                expiresIn: '7 days'
+            }
         });
 
     } catch (error) {

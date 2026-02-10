@@ -1,5 +1,5 @@
 // influencerApproval.js
-const influencerApprovalTemplate = (name, affiliateCode, stripeConnectLink) => {
+const influencerApprovalTemplate = (name, affiliateCode, accountSetupUrl) => {
   return `
     <!DOCTYPE html>
     <html>
@@ -11,30 +11,51 @@ const influencerApprovalTemplate = (name, affiliateCode, stripeConnectLink) => {
             .header h1 { color: #f97316; }
             .content { line-height: 1.6; }
             .button { display: inline-block; background-color: #f97316; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+            .code { background: #2a2a3e; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 18px; letter-spacing: 2px; }
             .footer { margin-top: 30px; text-align: center; color: #888888; font-size: 12px; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>You're Approved to Partner with ClockWork ⚡</h1>
+                <h1>🎉 You're Approved to Join ClockWork as a Creator!</h1>
             </div>
             <div class="content">
                 <p>Hey ${name},</p>
-                <p>We reviewed your application. Your content + audience align perfectly with ClockWork's mission.</p>
-                <p>We're selective about who represents our brand. <strong>You made the cut.</strong></p>
-                <p>Here's what's next:</p>
+                <p>Congratulations! Your application to join ClockWork as a creator has been <strong>approved</strong>.</p>
+                <p>We reviewed your content and audience — you're exactly the kind of creator we want representing ClockWork.</p>
+
+                <h3>🎯 Your Affiliate Code:</h3>
+                <div class="code">${affiliateCode}</div>
+
+                <h3>✅ Next Steps:</h3>
                 <ol>
-                    <li><strong>Complete Stripe onboarding</strong> (link below) — takes 5 min</li>
-                    <li>Once approved, you'll get access to your partner dashboard</li>
-                    <li>Earn <strong>$4.99 recurring commission</strong> for every paid subscriber you refer</li>
+                    <li><strong>Create your creator account</strong> (click the button below)</li>
+                    <li>Access your Creator Studio dashboard</li>
+                    <li>Connect your Stripe account to receive payouts</li>
+                    <li>Start earning <strong>$4.99 recurring commission</strong> for every paid subscriber</li>
                 </ol>
-                <p><strong>Your Code:</strong> ${affiliateCode}</p>
-                <p><strong>Dashboard:</strong> <a href="https://clockwork.fit/influencer" style="color: #f97316;">https://clockwork.fit/influencer</a></p>
-                <a href="${stripeConnectLink}" class="button">Set Up Payouts on Stripe</a>
-                <p style="margin-top: 20px;">We'll get you assets + talking points by tomorrow.</p>
-                <p>Let's build something great.</p>
-                <p>— Josh & the ClockWork Team</p>
+
+                <div style="text-align: center;">
+                    <a href="${accountSetupUrl}" class="button">Create My Creator Account</a>
+                </div>
+
+                <p style="margin-top: 20px; font-size: 14px; color: #888;">
+                    <strong>Note:</strong> This link expires in 7 days. If it expires, contact support for a new invitation.
+                </p>
+
+                <p style="margin-top: 30px;">Once you're in, you'll have access to:</p>
+                <ul>
+                    <li>📊 Real-time analytics dashboard</li>
+                    <li>💰 Earnings tracking & payout management</li>
+                    <li>🎨 Marketing assets & content templates</li>
+                    <li>🔗 Custom referral links</li>
+                </ul>
+
+                <p>Ready to get started? Click the button above to create your account.</p>
+
+                <p>Let's build something great together.</p>
+                <p>— The ClockWork Team</p>
             </div>
             <div class="footer">
                 <p>&copy; ${new Date().getFullYear()} ClockWork. All rights reserved.</p>

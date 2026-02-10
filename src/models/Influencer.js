@@ -18,11 +18,28 @@ const influencerSchema = new mongoose.Schema({
     unique: true
   },
   stripeAccountId: {
-    type: String
+    type: String,
+    default: null
   },
   stripeOnboardingComplete: {
     type: Boolean,
     default: false
+  },
+  stripeDetailsSubmitted: {
+    type: Boolean,
+    default: false
+  },
+  stripeChargesEnabled: {
+    type: Boolean,
+    default: false
+  },
+  stripePayoutsEnabled: {
+    type: Boolean,
+    default: false
+  },
+  stripeConnectedAt: {
+    type: Date,
+    default: null
   },
   stats: {
     clicks: {

@@ -38,6 +38,31 @@ const influencerApplicationSchema = new mongoose.Schema({
   adminNotes: {
     type: String,
     default: ''
+  },
+  approvalToken: {
+    type: String,
+    default: null,
+    index: true
+  },
+  approvalTokenExpires: {
+    type: Date,
+    default: null
+  },
+  approvedAt: {
+    type: Date,
+    default: null
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  affiliateCode: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true

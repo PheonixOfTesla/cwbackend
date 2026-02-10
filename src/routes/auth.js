@@ -41,6 +41,12 @@ router.get('/twilio-status', authController.twilioStatus);
 // Reset password with code (email flow)
 router.put('/reset-password/:resetToken', authController.resetPassword);
 
+// Validate creator approval token
+router.post('/validate-approval-token', authController.validateApprovalToken);
+
+// Creator signup with approval token
+router.post('/creator/signup', authController.creatorSignup);
+
 // ============================================
 // PROTECTED ROUTES (Authentication required)
 // ============================================

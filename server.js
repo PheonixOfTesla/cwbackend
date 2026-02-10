@@ -243,6 +243,10 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/earnings', earningsRoutes);
 
+// Upload
+const uploadRoutes = require('./src/routes/upload');
+app.use('/api/upload', uploadRoutes);
+
 // ============================================
 // HEALTH CHECK ENDPOINT
 // ============================================

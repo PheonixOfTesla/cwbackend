@@ -83,11 +83,9 @@ const sendWelcomeEmail = async (email, name) => {
     return sendEmail(email, subject, html);
 };
 
-const sendInfluencerApprovalEmail = async (email, name, affiliateCode) => {
-    // TODO: Generate a real Stripe Connect link
-    const stripeConnectLink = `https://connect.stripe.com/oauth/v2/authorize?response_type=code&client_id=${process.env.STRIPE_CONNECT_CLIENT_ID}&scope=read_write`;
-    const html = influencerApprovalTemplate(name, affiliateCode, stripeConnectLink);
-    const subject = `You're Approved to Partner with ClockWork ⚡`;
+const sendInfluencerApprovalEmail = async (email, name, affiliateCode, accountSetupUrl) => {
+    const html = influencerApprovalTemplate(name, affiliateCode, accountSetupUrl);
+    const subject = `🎉 You're Approved to Join ClockWork as a Creator!`;
     return sendEmail(email, subject, html);
 };
 

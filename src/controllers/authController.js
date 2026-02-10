@@ -2,6 +2,8 @@
 const User = require('../models/User');
 const AICoach = require('../models/AICoach');
 const Earnings = require('../models/Earnings');
+const InfluencerApplication = require('../models/InfluencerApplication');
+const Influencer = require('../models/Influencer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -867,6 +869,163 @@ exports.upgradeToCoach = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to upgrade account'
+        });
+    }
+};
+
+// ============================================
+// VALIDATE CREATOR APPROVAL TOKEN
+// ============================================
+exports.validateApprovalToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Approval token is required'
+            });
+        }
+
+        // Find application with valid token
+        const application = await InfluencerApplication.findOne({
+            approvalToken: token,
+            approvalTokenExpires: { $gt: new Date() },
+            status: 'approved'
+        });
+
+        if (!application) {
+            return res.json({
+                success: false,
+                message: 'Invalid or expired approval link. Please contact support for assistance.'
+            });
+        }
+
+        // Check if account already exists
+        const existingUser = await User.findOne({ email: application.email });
+        if (existingUser) {
+            return res.json({
+                success: false,
+                message: 'Account already exists. Please sign in instead.'
+            });
+        }
+
+        // Token is valid
+        res.json({
+            success: true,
+            email: application.email,
+            name: application.name
+        });
+
+    } catch (error) {
+        console.error('Validate approval token error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error validating token'
+        });
+    }
+};
+
+// ============================================
+// CREATOR SIGNUP WITH APPROVAL TOKEN
+// ============================================
+exports.creatorSignup = async (req, res) => {
+    try {
+        const { token, password } = req.body;
+
+        // Validate input
+        if (!token || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Approval token and password are required'
+            });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 8 characters long'
+            });
+        }
+
+        // Find application with valid token
+        const application = await InfluencerApplication.findOne({
+            approvalToken: token,
+            approvalTokenExpires: { $gt: new Date() },
+            status: 'approved'
+        });
+
+        if (!application) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired approval token'
+            });
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: application.email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Account already exists. Please sign in instead.'
+            });
+        }
+
+        // Create user account
+        const user = new User({
+            email: application.email,
+            password: password, // Will be hashed by pre-save hook
+            name: application.name,
+            userType: 'individual',
+            emailVerified: true, // Auto-verify since admin approved
+            coachProfile: {
+                verified: false,
+                bio: '',
+                handle: null
+            }
+        });
+        await user.save();
+
+        // Create Influencer record
+        const influencer = new Influencer({
+            user: user._id,
+            application: application._id,
+            affiliateCode: application.affiliateCode,
+            status: 'active'
+        });
+        await influencer.save();
+
+        // Clear the approval token (one-time use)
+        application.approvalToken = null;
+        application.approvalTokenExpires = null;
+        await application.save();
+
+        // Generate JWT token
+        const authToken = jwt.sign(
+            { id: user._id, userType: user.userType },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        console.log(`✅ Creator account created for: ${user.email}`);
+
+        res.json({
+            success: true,
+            message: 'Account created successfully',
+            token: authToken,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                userType: user.userType
+            }
+        });
+
+    } catch (error) {
+        console.error('Creator signup error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error during account creation'
         });
     }
 };
