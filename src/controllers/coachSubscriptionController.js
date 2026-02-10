@@ -12,17 +12,27 @@ const PLATFORM_FEE_PERCENT = 10;
 exports.subscribeToCoach = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { coachId } = req.params;
+    let { coachId } = req.params;
     const { tier, applicationMessage } = req.body;
 
     if (!['content', 'coaching'].includes(tier)) {
       return res.status(400).json({ success: false, message: 'Invalid tier. Must be "content" or "coaching"' });
     }
 
-    // Get coach info
+    // Resolve handle to ID if needed
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(coachId)) {
+      const creator = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('_id');
+      if (!creator) {
+        return res.status(404).json({ success: false, message: 'Creator not found' });
+      }
+      coachId = creator._id;
+    }
+
+    // Get coach/creator info - allow coaches OR users with coachProfile
     const coach = await User.findById(coachId);
-    if (!coach || coach.userType !== 'coach') {
-      return res.status(404).json({ success: false, message: 'Coach not found' });
+    if (!coach || (!coach.coachProfile && coach.userType !== 'coach')) {
+      return res.status(404).json({ success: false, message: 'Creator not found' });
     }
 
     // Check existing subscription
