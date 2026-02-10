@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema({
   // ═══════════════════════════════════════════════════════════
   userType: {
     type: String,
-    enum: ['coach', 'client', 'individual'],
+    enum: ['coach', 'client', 'individual', 'influencer'],
     required: true,
     default: 'individual'
   },
