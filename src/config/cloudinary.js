@@ -1,13 +1,27 @@
 // src/config/cloudinary.js - Cloudinary Configuration
+
+// IMPORTANT: Clear malformed CLOUDINARY_URL before requiring cloudinary
+// (cloudinary auto-parses it on load and crashes if malformed)
+if (process.env.CLOUDINARY_URL && !process.env.CLOUDINARY_URL.startsWith('cloudinary://')) {
+    console.warn('⚠️ Malformed CLOUDINARY_URL detected, clearing it');
+    delete process.env.CLOUDINARY_URL;
+}
+
 const cloudinary = require('cloudinary').v2;
 
-// Configure Cloudinary using CLOUDINARY_URL from environment
-// Format: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
-if (process.env.CLOUDINARY_URL) {
-    // Cloudinary automatically configures from CLOUDINARY_URL
+// Configure Cloudinary - use individual vars (more reliable than CLOUDINARY_URL)
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+    console.log('✅ Cloudinary configured');
+} else if (process.env.CLOUDINARY_URL) {
     console.log('✅ Cloudinary configured from CLOUDINARY_URL');
 } else {
-    console.warn('⚠️ CLOUDINARY_URL not set - file uploads will fail');
+    console.warn('⚠️ Cloudinary not configured - file uploads will fail');
+    console.warn('   Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
 }
 
 /**

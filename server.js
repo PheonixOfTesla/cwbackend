@@ -9,6 +9,9 @@ const { createServer } = require('http');
 const socketIO = require('socket.io');
 require('dotenv').config();
 
+// IMPORTANT: Load cloudinary config early to handle malformed CLOUDINARY_URL
+require('./src/config/cloudinary');
+
 // ============================================
 // INITIALIZATION
 // ============================================
