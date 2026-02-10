@@ -166,7 +166,7 @@ exports.uploadProfilePicture = async (req, res) => {
     const userId = req.user.id;
     const { imageData } = req.body; // Base64 encoded image
 
-    if (req.user.userType !== 'coach') {
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can upload profile pictures'
@@ -1377,7 +1377,7 @@ exports.updateCreatorProfile = async (req, res) => {
     const userId = req.user.id;
     const { handle, coverImage, stats, pricing, verified } = req.body;
 
-    if (req.user.userType !== 'coach') {
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can update creator profile'
