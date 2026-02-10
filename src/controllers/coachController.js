@@ -1282,7 +1282,7 @@ exports.updateLinks = async (req, res) => {
     const userId = req.user.id;
     const { links } = req.body;
 
-    if (req.user.userType !== 'coach') {
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can update links'
@@ -1333,7 +1333,7 @@ exports.updateAffiliateCodes = async (req, res) => {
     const userId = req.user.id;
     const { affiliateCodes } = req.body;
 
-    if (req.user.userType !== 'coach') {
+    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can update affiliate codes'
