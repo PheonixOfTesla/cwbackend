@@ -1279,7 +1279,15 @@ exports.getCoachLinks = async (req, res) => {
   try {
     const { coachId } = req.params;
 
-    const coach = await User.findById(coachId).select('coachProfile.links coachProfile.affiliateCodes');
+    const isObjectId = mongoose.Types.ObjectId.isValid(coachId) && coachId.length === 24;
+
+    let coach;
+    if (isObjectId) {
+      coach = await User.findById(coachId).select('coachProfile.links coachProfile.affiliateCodes');
+    }
+    if (!coach) {
+      coach = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('coachProfile.links coachProfile.affiliateCodes');
+    }
 
     if (!coach) {
       return res.status(404).json({
