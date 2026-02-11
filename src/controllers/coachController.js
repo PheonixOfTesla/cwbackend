@@ -91,7 +91,7 @@ exports.updateCoachProfile = async (req, res) => {
   console.log('[DIAGNOSTIC LOG] Received PUT /api/coach/profile with body:', JSON.stringify(req.body, null, 2));
   try {
     const userId = req.user.id;
-    const { specialty, bio, experienceYears, certifications, coachProfile } = req.body;
+    const { specialty, bio, experienceYears, certifications, coachProfile, socialLinks } = req.body;
 
     if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
       return res.status(403).json({
@@ -107,6 +107,14 @@ exports.updateCoachProfile = async (req, res) => {
     if (bio !== undefined) updateData['coachProfile.bio'] = bio;
     if (experienceYears !== undefined) updateData['coachProfile.experienceYears'] = experienceYears;
     if (certifications !== undefined) updateData['coachProfile.certifications'] = certifications;
+
+    // Handle top-level socialLinks (from settings tab)
+    if (socialLinks) {
+      if (socialLinks.instagram !== undefined) updateData['coachProfile.socialLinks.instagram'] = socialLinks.instagram;
+      if (socialLinks.tiktok !== undefined) updateData['coachProfile.socialLinks.tiktok'] = socialLinks.tiktok;
+      if (socialLinks.youtube !== undefined) updateData['coachProfile.socialLinks.youtube'] = socialLinks.youtube;
+      if (socialLinks.twitter !== undefined) updateData['coachProfile.socialLinks.twitter'] = socialLinks.twitter;
+    }
 
     // Handle nested coachProfile object updates (new approach)
     if (coachProfile) {
@@ -135,6 +143,12 @@ exports.updateCoachProfile = async (req, res) => {
       if (coachProfile.profilePicture !== undefined) updateData['coachProfile.profilePicture'] = coachProfile.profilePicture;
       if (coachProfile.bio !== undefined) updateData['coachProfile.bio'] = coachProfile.bio;
       if (coachProfile.specialty !== undefined) updateData['coachProfile.specialty'] = coachProfile.specialty;
+      if (coachProfile.socialLinks !== undefined) {
+        if (coachProfile.socialLinks.instagram !== undefined) updateData['coachProfile.socialLinks.instagram'] = coachProfile.socialLinks.instagram;
+        if (coachProfile.socialLinks.tiktok !== undefined) updateData['coachProfile.socialLinks.tiktok'] = coachProfile.socialLinks.tiktok;
+        if (coachProfile.socialLinks.youtube !== undefined) updateData['coachProfile.socialLinks.youtube'] = coachProfile.socialLinks.youtube;
+        if (coachProfile.socialLinks.twitter !== undefined) updateData['coachProfile.socialLinks.twitter'] = coachProfile.socialLinks.twitter;
+      }
     }
 
     const user = await User.findByIdAndUpdate(
@@ -1240,6 +1254,7 @@ exports.getPublicProfile = async (req, res) => {
         certifications: profile.certifications || [],
         stats: profile.stats || { clientsCoached: 0, followers: 0 },
         pricing: profile.pricing || { subscriptionPrice: 999, coachingPrice: 14999 },
+        socialLinks: profile.socialLinks || {},
         links: (profile.links || []).filter(l => l.isActive).sort((a, b) => a.order - b.order),
         affiliateCodes: profile.affiliateCodes || [],
         scheduling: profile.scheduling || {},

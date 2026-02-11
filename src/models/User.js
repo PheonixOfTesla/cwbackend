@@ -189,6 +189,12 @@ const userSchema = new mongoose.Schema({
     handle: { type: String, sparse: true },  // @handle like Twitter
     verified: { type: Boolean, default: false },
     coverImage: { type: String },
+    socialLinks: {
+      instagram: { type: String, default: '' },
+      tiktok: { type: String, default: '' },
+      youtube: { type: String, default: '' },
+      twitter: { type: String, default: '' }
+    },
     stats: {
       clientsCoached: { type: Number, default: 0 },
       followers: { type: Number, default: 0 }
