@@ -88,6 +88,7 @@ exports.getCoachProfile = async (req, res) => {
 // UPDATE COACH PROFILE
 // ============================================
 exports.updateCoachProfile = async (req, res) => {
+  console.log('[DIAGNOSTIC LOG] Received PUT /api/coach/profile with body:', JSON.stringify(req.body, null, 2));
   try {
     const userId = req.user.id;
     const { specialty, bio, experienceYears, certifications, coachProfile } = req.body;
@@ -141,6 +142,10 @@ exports.updateCoachProfile = async (req, res) => {
       { $set: updateData },
       { new: true, runValidators: true }
     ).select('name email coachProfile');
+
+    if (updateData['coachProfile.handle']) {
+      console.log(`[DIAGNOSTIC LOG] Handle '${updateData['coachProfile.handle']}' was processed for saving to user ID '${userId}'.`);
+    }
 
     res.json({
       success: true,
@@ -1187,7 +1192,13 @@ exports.getPublicProfile = async (req, res) => {
 
     // If not found by ID, try by handle
     if (!coach) {
+      console.log(`[DIAGNOSTIC LOG] Looking up user by handle: '${coachId.toLowerCase()}'`);
       coach = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('name email coachProfile userType createdAt');
+      if (coach) {
+        console.log(`[DIAGNOSTIC LOG] Found user ID '${coach._id}' for handle '${coachId.toLowerCase()}'.`);
+      } else {
+        console.log(`[DIAGNOSTIC LOG] No user found for handle '${coachId.toLowerCase()}'.`);
+      }
     }
 
     // Allow coaches OR users with coachProfile (creators)
