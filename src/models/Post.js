@@ -120,22 +120,42 @@ postSchema.methods.canView = function(userSubscriptionTier) {
 
 // Static method to get feed for a coach
 postSchema.statics.getFeed = async function(coachId, userTier = null, page = 1, limit = 20) {
-  const query = { coachId, isActive: true };
-
-  // Filter by visibility based on user tier
-  if (!userTier) {
-    query.visibility = 'public';
-  } else if (userTier === 'content') {
-    query.visibility = { $in: ['public', 'subscribers'] };
-  }
-  // coaching tier can see all
-
-  const posts = await this.find(query)
+  // Get ALL active posts (we'll mark locked ones)
+  const allPosts = await this.find({ coachId, isActive: true })
     .sort({ isPinned: -1, createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit)
     .populate('coachId', 'name coachProfile.profilePicture')
     .lean();
+
+  // Process posts - mark locked ones and redact content
+  const posts = allPosts.map(post => {
+    const canView =
+      post.visibility === 'public' ||
+      (post.visibility === 'subscribers' && ['content', 'coaching'].includes(userTier)) ||
+      (post.visibility === 'coaching' && userTier === 'coaching');
+
+    if (canView) {
+      return { ...post, isLocked: false };
+    } else {
+      // Return locked post with redacted content but keep media for blur preview
+      return {
+        _id: post._id,
+        coachId: post.coachId,
+        mediaUrl: post.mediaUrl, // Keep for blurred preview
+        mediaType: post.mediaType,
+        carousel: post.carousel,
+        postType: post.postType,
+        visibility: post.visibility,
+        likesCount: post.likesCount,
+        commentsCount: post.commentsCount,
+        isPinned: post.isPinned,
+        createdAt: post.createdAt,
+        isLocked: true,
+        content: null // Redact actual content
+      };
+    }
+  });
 
   return posts;
 };
