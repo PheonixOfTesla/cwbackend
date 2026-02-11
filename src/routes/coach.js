@@ -15,6 +15,27 @@ const { coachInviteLimiter } = require('../middleware/rateLimiter');
 // GET /api/coach/list - Get all coaches (for signup)
 router.get('/list', coachController.getCoachesList);
 
+// GET /api/coach/debug-handles - List all handles in database (for debugging)
+router.get('/debug-handles', async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const usersWithHandles = await User.find({ 'coachProfile.handle': { $exists: true, $ne: null } })
+      .select('_id name coachProfile.handle')
+      .limit(20);
+    res.json({
+      success: true,
+      count: usersWithHandles.length,
+      users: usersWithHandles.map(u => ({
+        id: u._id,
+        name: u.name,
+        handle: u.coachProfile?.handle
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/coach/:coachId/public - Get public coach profile (no auth)
 router.get('/:coachId/public', coachController.getPublicProfile);
 

@@ -645,6 +645,7 @@ userSchema.index({ userType: 1 });
 userSchema.index({ coachId: 1 });
 userSchema.index({ 'subscription.tier': 1 });
 userSchema.index({ 'subscription.status': 1 });
+userSchema.index({ 'coachProfile.handle': 1 }, { unique: true, sparse: true }); // For @handle lookups
 
 // Hash password on save
 userSchema.pre('save', async function(next) {

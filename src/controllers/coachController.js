@@ -144,7 +144,8 @@ exports.updateCoachProfile = async (req, res) => {
     ).select('name email coachProfile');
 
     if (updateData['coachProfile.handle']) {
-      console.log(`[DIAGNOSTIC LOG] Handle '${updateData['coachProfile.handle']}' was processed for saving to user ID '${userId}'.`);
+      console.log(`[HANDLE SAVE] Handle '${updateData['coachProfile.handle']}' was saved to user ID '${userId}'.`);
+      console.log(`[HANDLE SAVE] Verification - user.coachProfile.handle = '${user.coachProfile?.handle}'`);
     }
 
     res.json({
@@ -1181,23 +1182,36 @@ exports.getSessions = async (req, res) => {
 exports.getPublicProfile = async (req, res) => {
   try {
     const { coachId } = req.params;
+    console.log(`[PUBLIC PROFILE] Request received for: '${coachId}'`);
 
     // Support lookup by handle OR by MongoDB ID
-    const isObjectId = mongoose.Types.ObjectId.isValid(coachId);
+    const isObjectId = mongoose.Types.ObjectId.isValid(coachId) && coachId.length === 24;
 
     let coach;
     if (isObjectId) {
+      console.log(`[PUBLIC PROFILE] Attempting lookup by ObjectId: '${coachId}'`);
       coach = await User.findById(coachId).select('name email coachProfile userType createdAt');
+      if (coach) {
+        console.log(`[PUBLIC PROFILE] Found by ObjectId: ${coach._id}, name: ${coach.name}`);
+      }
     }
 
     // If not found by ID, try by handle
     if (!coach) {
-      console.log(`[DIAGNOSTIC LOG] Looking up user by handle: '${coachId.toLowerCase()}'`);
-      coach = await User.findOne({ 'coachProfile.handle': coachId.toLowerCase() }).select('name email coachProfile userType createdAt');
+      const handleLower = coachId.toLowerCase();
+      console.log(`[PUBLIC PROFILE] Attempting lookup by handle: '${handleLower}'`);
+      coach = await User.findOne({ 'coachProfile.handle': handleLower }).select('name email coachProfile userType createdAt');
       if (coach) {
-        console.log(`[DIAGNOSTIC LOG] Found user ID '${coach._id}' for handle '${coachId.toLowerCase()}'.`);
+        console.log(`[PUBLIC PROFILE] SUCCESS - Found user ID '${coach._id}' with handle '${handleLower}', name: '${coach.name}'`);
       } else {
-        console.log(`[DIAGNOSTIC LOG] No user found for handle '${coachId.toLowerCase()}'.`);
+        console.log(`[PUBLIC PROFILE] FAIL - No user found for handle '${handleLower}'`);
+        // Debug: Check if any users have handles at all
+        const anyUserWithHandle = await User.findOne({ 'coachProfile.handle': { $exists: true, $ne: null } }).select('_id coachProfile.handle');
+        if (anyUserWithHandle) {
+          console.log(`[PUBLIC PROFILE] DEBUG - Sample user with handle: ID=${anyUserWithHandle._id}, handle='${anyUserWithHandle.coachProfile?.handle}'`);
+        } else {
+          console.log(`[PUBLIC PROFILE] DEBUG - No users in database have coachProfile.handle set!`);
+        }
       }
     }
 
@@ -1433,6 +1447,11 @@ exports.updateCreatorProfile = async (req, res) => {
       { $set: updateData },
       { new: true, runValidators: true }
     ).select('coachProfile.handle coachProfile.coverImage coachProfile.stats coachProfile.pricing coachProfile.verified');
+
+    if (updateData['coachProfile.handle']) {
+      console.log(`[CREATOR PROFILE] Handle '${updateData['coachProfile.handle']}' saved for user '${userId}'`);
+      console.log(`[CREATOR PROFILE] Verification - user.coachProfile.handle = '${user.coachProfile?.handle}'`);
+    }
 
     res.json({
       success: true,
