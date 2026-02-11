@@ -112,10 +112,10 @@ exports.updateCoachProfile = async (req, res) => {
       if (coachProfile.handle !== undefined) {
         // Validate handle format
         const handle = coachProfile.handle.toLowerCase();
-        if (!/^[a-z0-9_]+$/.test(handle)) {
+        if (!/^[a-z0-9_-]{3,30}$/.test(handle)) {
           return res.status(400).json({
             success: false,
-            message: 'Handle can only contain lowercase letters, numbers, and underscores'
+            message: 'Handle must be 3-30 characters and can only contain lowercase letters, numbers, underscores, and hyphens'
           });
         }
         // Check if handle is already taken
@@ -212,20 +212,12 @@ exports.checkHandleAvailability = async (req, res) => {
     const { handle } = req.params;
     const userId = req.user.id;
 
-    if (!handle || handle.length < 3) {
+    // Check if handle is valid
+    if (!/^[a-z0-9_-]{3,30}$/.test(handle.toLowerCase())) {
       return res.json({
         success: false,
         available: false,
-        message: 'Handle must be at least 3 characters'
-      });
-    }
-
-    // Check if handle is alphanumeric and lowercase
-    if (!/^[a-z0-9_]+$/.test(handle.toLowerCase())) {
-      return res.json({
-        success: false,
-        available: false,
-        message: 'Handle can only contain lowercase letters, numbers, and underscores'
+        message: 'Handle must be 3-30 characters and can only contain lowercase letters, numbers, underscores, and hyphens'
       });
     }
 
@@ -1387,14 +1379,15 @@ exports.updateCreatorProfile = async (req, res) => {
     const updateData = {};
 
     if (handle !== undefined) {
-      // Validate handle format (alphanumeric, underscores, 3-30 chars)
-      if (handle && !/^[a-zA-Z0-9_]{3,30}$/.test(handle)) {
+      const handleLower = handle.toLowerCase();
+      // Validate handle format (alphanumeric, underscores, hyphens, 3-30 chars)
+      if (!/^[a-z0-9_-]{3,30}$/.test(handleLower)) {
         return res.status(400).json({
           success: false,
-          message: 'Handle must be 3-30 characters, alphanumeric and underscores only'
+          message: 'Handle must be 3-30 characters and can only contain lowercase letters, numbers, underscores, and hyphens'
         });
       }
-      updateData['coachProfile.handle'] = handle.toLowerCase();
+      updateData['coachProfile.handle'] = handleLower;
     }
 
     if (coverImage !== undefined) {
