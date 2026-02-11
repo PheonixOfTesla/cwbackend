@@ -2,6 +2,7 @@
 const Post = require('../models/Post');
 const CoachSubscription = require('../models/CoachSubscription');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 // ============================================
 // CREATE POST (Coach only)
@@ -52,20 +53,33 @@ exports.getCoachFeed = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const userId = req.user?.id;
 
+    // Resolve handle to ObjectId if needed
+    let resolvedCoachId = coachId;
+    if (!mongoose.Types.ObjectId.isValid(coachId)) {
+      const coach = await User.findOne({
+        'coachProfile.handle': { $regex: new RegExp(`^${coachId}$`, 'i') },
+        userType: 'coach'
+      }).select('_id');
+      if (!coach) {
+        return res.status(404).json({ success: false, message: 'Coach not found' });
+      }
+      resolvedCoachId = coach._id;
+    }
+
     // Check subscription status
     let userTier = null;
     if (userId) {
-      const subscription = await CoachSubscription.getUserSubscription(userId, coachId);
+      const subscription = await CoachSubscription.getUserSubscription(userId, resolvedCoachId);
       if (subscription && subscription.isActive()) {
         userTier = subscription.tier;
       }
     }
 
     // Get posts based on user tier
-    const posts = await Post.getFeed(coachId, userTier, parseInt(page), parseInt(limit));
+    const posts = await Post.getFeed(resolvedCoachId, userTier, parseInt(page), parseInt(limit));
 
     // Get total count for pagination
-    const query = { coachId, isActive: true };
+    const query = { coachId: resolvedCoachId, isActive: true };
     if (!userTier) {
       query.visibility = 'public';
     } else if (userTier === 'content') {
@@ -76,7 +90,7 @@ exports.getCoachFeed = async (req, res) => {
     // Check if there are locked posts (for showing paywall teaser)
     let lockedPostsCount = 0;
     if (!userTier || userTier === 'content') {
-      const lockedQuery = { coachId, isActive: true };
+      const lockedQuery = { coachId: resolvedCoachId, isActive: true };
       if (!userTier) {
         lockedQuery.visibility = { $in: ['subscribers', 'coaching'] };
       } else {

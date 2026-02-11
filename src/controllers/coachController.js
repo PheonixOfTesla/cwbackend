@@ -5,6 +5,7 @@ const Workout = require('../models/Workout');
 const Session = require('../models/Session');
 const { ALL_EXERCISES } = require('../data/exerciseLibrary');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 // ============================================
 // GET COACHES LIST (Public - for signup)
@@ -1095,9 +1096,19 @@ exports.getPublicProfile = async (req, res) => {
   try {
     const { coachId } = req.params;
 
-    const coach = await User.findById(coachId).select(
-      'name email coachProfile userType createdAt'
-    );
+    // Check if coachId is a valid ObjectId or a handle
+    let coach;
+    if (mongoose.Types.ObjectId.isValid(coachId)) {
+      coach = await User.findById(coachId).select(
+        'name email coachProfile userType createdAt'
+      );
+    } else {
+      // Treat as handle - case-insensitive lookup
+      coach = await User.findOne({
+        'coachProfile.handle': { $regex: new RegExp(`^${coachId}$`, 'i') },
+        userType: 'coach'
+      }).select('name email coachProfile userType createdAt');
+    }
 
     if (!coach || coach.userType !== 'coach') {
       return res.status(404).json({
@@ -1147,7 +1158,17 @@ exports.getCoachLinks = async (req, res) => {
   try {
     const { coachId } = req.params;
 
-    const coach = await User.findById(coachId).select('coachProfile.links coachProfile.affiliateCodes');
+    // Check if coachId is a valid ObjectId or a handle
+    let coach;
+    if (mongoose.Types.ObjectId.isValid(coachId)) {
+      coach = await User.findById(coachId).select('coachProfile.links coachProfile.affiliateCodes userType');
+    } else {
+      // Treat as handle - case-insensitive lookup
+      coach = await User.findOne({
+        'coachProfile.handle': { $regex: new RegExp(`^${coachId}$`, 'i') },
+        userType: 'coach'
+      }).select('coachProfile.links coachProfile.affiliateCodes userType');
+    }
 
     if (!coach) {
       return res.status(404).json({
