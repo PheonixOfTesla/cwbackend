@@ -1241,7 +1241,12 @@ exports.getPublicProfile = async (req, res) => {
 
     // Fetch posts for this creator
     const Post = require('../models/Post');
-    const posts = await Post.getForViewer(coach._id, null); // null = not subscribed, shows preview
+    let posts = [];
+    try {
+      posts = await Post.getFeed(coach._id, null, 1, 10); // null tier = free preview
+    } catch (e) {
+      console.error('Error fetching posts:', e.message);
+    }
 
     res.json({
       success: true,
