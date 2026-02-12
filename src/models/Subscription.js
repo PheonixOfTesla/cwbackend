@@ -1,3 +1,4 @@
+
 // Src/models/Subscription.js
 const mongoose = require('mongoose');
 
@@ -6,19 +7,29 @@ const subscriptionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true
+  },
+  
+  // CRITICAL: Link to the creator being subscribed to.
+  creatorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
   },
 
   // Tier
   tier: {
     type: String,
     enum: ['free', 'pro', 'elite', 'vip'],
-    default: 'free'
+    default: 'pro' // Default to a paid tier for this model
   },
 
   // Stripe IDs
   stripeCustomerId: String,
-  stripeSubscriptionId: String,
+  stripeSubscriptionId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows multiple null values
+  },
   stripePriceId: String,
 
   // Status
@@ -44,6 +55,10 @@ const subscriptionSchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
+
+// Compound index to ensure a user can only have one subscription per creator
+subscriptionSchema.index({ userId: 1, creatorId: 1 }, { unique: true });
+
 
 // Tier Limits
 subscriptionSchema.statics.TIER_LIMITS = {
@@ -93,6 +108,7 @@ subscriptionSchema.statics.TIER_LIMITS = {
 // Check if user can perform action
 subscriptionSchema.methods.canPerform = function(action) {
   const limits = this.constructor.TIER_LIMITS[this.tier];
+  if (!limits) return false;
 
   switch(action) {
     case 'generateWorkout':
@@ -124,3 +140,4 @@ subscriptionSchema.methods.incrementUsage = async function(action) {
 };
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);
+

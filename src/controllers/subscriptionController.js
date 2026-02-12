@@ -13,116 +13,141 @@ const STRIPE_PRICES = {
   elite_yearly: process.env.STRIPE_ELITE_YEARLY_PRICE_ID
 };
 
-// Get current subscription status
-exports.getStatus = async (req, res) => {
-  try {
-    let subscription = await Subscription.findOne({ userId: req.user.id });
-
-    if (!subscription) {
-      subscription = await Subscription.create({
-        userId: req.user.id,
-        tier: 'free',
-        status: 'active'
-      });
+/**
+ * Gets the tier string from a Stripe price ID.
+ * @param {string} priceId The Stripe Price ID.
+ * @returns {string} The corresponding tier ('pro', 'elite', etc.).
+ */
+const getTierFromPriceId = (priceId) => {
+  for (const tier in STRIPE_PRICES) {
+    if (STRIPE_PRICES[tier] === priceId) {
+      return tier.split('_')[0]; // 'pro_monthly' -> 'pro'
     }
-
-    const limits = Subscription.TIER_LIMITS[subscription.tier];
-
-    res.json({
-      success: true,
-      data: {
-        ...subscription.toObject(),
-        limits,
-        canGenerateWorkout: subscription.canPerform('generateWorkout'),
-        canAiQuery: subscription.canPerform('aiQuery'),
-        canWearableSync: subscription.canPerform('wearableSync')
-      }
-    });
-  } catch (error) {
-    console.error('Get subscription status error:', error);
-    res.status(500).json({ success: false, message: error.message });
   }
+  return 'pro'; // Default fallback
+};
+
+/**
+ * Centralized function to sync subscription state from a Stripe subscription object.
+ */
+const syncSubscription = async (stripeSubscription, metadata = {}) => {
+  const stripeSubscriptionId = stripeSubscription.id;
+  
+  // Metadata from the checkout session is the most reliable source for our internal IDs.
+  const userId = metadata.userId;
+  const creatorId = metadata.creatorId;
+
+  if (!userId || !creatorId) {
+      console.error(`Webhook for subscription ${stripeSubscriptionId} is missing critical metadata (userId or creatorId). Cannot sync.`);
+      return;
+  }
+
+  const priceId = stripeSubscription.items.data[0].price.id;
+  const tier = getTierFromPriceId(priceId);
+
+  const subscriptionData = {
+    userId,
+    creatorId,
+    tier,
+    status: stripeSubscription.status,
+    stripeCustomerId: stripeSubscription.customer,
+    stripeSubscriptionId: stripeSubscriptionId,
+    stripePriceId: priceId,
+    currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
+    currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+    cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+  };
+
+  await Subscription.findOneAndUpdate(
+    { stripeSubscriptionId: stripeSubscriptionId },
+    subscriptionData,
+    { upsert: true, new: true }
+  );
+
+  console.log(`Subscription synced for user ${userId} to creator ${creatorId}: Tier ${tier}, Status ${subscriptionData.status}`);
+};
+
+// Get current subscription status for a specific creator
+exports.getStatus = async (req, res) => {
+    try {
+        const { creatorId } = req.query;
+        if (!creatorId) {
+            return res.status(400).json({ success: false, message: 'creatorId is required' });
+        }
+
+        const subscription = await Subscription.findOne({ userId: req.user.id, creatorId: creatorId });
+
+        if (!subscription) {
+            return res.json({ success: true, data: { status: 'unsubscribed', tier: 'free' } });
+        }
+
+        const limits = Subscription.TIER_LIMITS[subscription.tier];
+        res.json({
+            success: true,
+            data: {
+                ...subscription.toObject(),
+                limits,
+            }
+        });
+    } catch (error) {
+        console.error('Get subscription status error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 };
 
 // Create checkout session
 exports.createCheckout = async (req, res) => {
   try {
-    const { priceKey, successUrl, cancelUrl } = req.body;
+    const { priceKey, successUrl, cancelUrl, creatorId } = req.body;
 
-    // Check if Stripe is configured
     if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({
-        success: false,
-        message: 'Stripe is not configured. Please contact support.'
-      });
+      return res.status(500).json({ success: false, message: 'Stripe is not configured.' });
+    }
+    if (!creatorId) {
+      return res.status(400).json({ success: false, message: 'creatorId is required.' });
     }
 
-    // Check if price ID is configured
-    if (!STRIPE_PRICES[priceKey]) {
-      console.error(`Missing Stripe price for ${priceKey}. Set STRIPE_PRO_MONTHLY_PRICE_ID in environment.`);
-      return res.status(400).json({
-        success: false,
-        message: 'Subscription pricing not configured. Please contact support.'
-      });
+    const priceId = STRIPE_PRICES[priceKey];
+    if (!priceId) {
+      return res.status(400).json({ success: false, message: 'Subscription pricing not configured.' });
     }
 
-    // Get or create Stripe customer
-    let subscription = await Subscription.findOne({ userId: req.user.id });
+    // Find subscription for the user, though we may not have one yet.
+    let subscription = await Subscription.findOne({ userId: req.user.id, creatorId });
     let customerId = subscription?.stripeCustomerId;
-
-    // Verify customer exists in Stripe (handles test/live mode mismatch)
-    if (customerId) {
-      try {
-        await stripe.customers.retrieve(customerId);
-      } catch (err) {
-        console.log(`Customer ${customerId} not found in Stripe, creating new one`);
-        customerId = null; // Will create new customer below
-      }
-    }
-
+    
+    // If we don't have a Stripe Customer ID for this user yet, create one.
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: req.user.email,
-        name: req.user.name,
-        metadata: { userId: req.user.id }
-      });
-      customerId = customer.id;
-
-      if (subscription) {
-        subscription.stripeCustomerId = customerId;
-        await subscription.save();
-      } else {
-        subscription = await Subscription.create({
-          userId: req.user.id,
-          stripeCustomerId: customerId,
-          tier: 'free'
-        });
-      }
+        // Let's see if this user has *any* subscription to get their customer ID
+        const anySub = await Subscription.findOne({ userId: req.user.id });
+        if (anySub?.stripeCustomerId) {
+            customerId = anySub.stripeCustomerId;
+        } else {
+            const customer = await stripe.customers.create({
+                email: req.user.email,
+                name: req.user.name,
+                metadata: { userId: req.user.id.toString() }
+            });
+            customerId = customer.id;
+        }
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
-      line_items: [{
-        price: STRIPE_PRICES[priceKey],
-        quantity: 1
-      }],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: successUrl || `${process.env.FRONTEND_URL}/settings?success=true`,
       cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/settings?canceled=true`,
       metadata: {
-        userId: req.user.id,
-        priceKey
+        userId: req.user.id.toString(),
+        creatorId: creatorId.toString(),
       }
     });
 
     res.json({
       success: true,
-      data: {
-        sessionId: session.id,
-        url: session.url
-      }
+      data: { sessionId: session.id, url: session.url }
     });
   } catch (error) {
     console.error('Create checkout error:', error);
@@ -130,16 +155,15 @@ exports.createCheckout = async (req, res) => {
   }
 };
 
+
 // Create customer portal session
 exports.createPortal = async (req, res) => {
   try {
+    // Find any subscription for the user to get their customer ID
     const subscription = await Subscription.findOne({ userId: req.user.id });
 
     if (!subscription?.stripeCustomerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No subscription found'
-      });
+      return res.status(400).json({ success: false, message: 'No Stripe customer ID found for this user.' });
     }
 
     const session = await stripe.billingPortal.sessions.create({
@@ -147,126 +171,126 @@ exports.createPortal = async (req, res) => {
       return_url: `${process.env.FRONTEND_URL}/settings`
     });
 
-    res.json({
-      success: true,
-      data: { url: session.url }
-    });
+    res.json({ success: true, data: { url: session.url } });
   } catch (error) {
     console.error('Create portal error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Cancel subscription
+// Cancel a specific subscription
 exports.cancel = async (req, res) => {
-  try {
-    const subscription = await Subscription.findOne({ userId: req.user.id });
+    try {
+        const { subscriptionId } = req.body; // The DB ID of the subscription
+        if (!subscriptionId) {
+            return res.status(400).json({ success: false, message: 'Subscription ID is required.' });
+        }
+        const subscription = await Subscription.findOne({ _id: subscriptionId, userId: req.user.id });
 
-    if (!subscription?.stripeSubscriptionId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active subscription'
-      });
+        if (!subscription?.stripeSubscriptionId) {
+            return res.status(400).json({ success: false, message: 'No active Stripe subscription found to cancel.' });
+        }
+
+        await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+            cancel_at_period_end: true
+        });
+
+        subscription.cancelAtPeriodEnd = true;
+        await subscription.save();
+
+        res.json({ success: true, message: 'Subscription will cancel at period end', data: subscription });
+    } catch (error) {
+        console.error('Cancel subscription error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
-
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: true
-    });
-
-    subscription.cancelAtPeriodEnd = true;
-    await subscription.save();
-
-    res.json({
-      success: true,
-      message: 'Subscription will cancel at period end',
-      data: subscription
-    });
-  } catch (error) {
-    console.error('Cancel subscription error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
 };
 
-// Reactivate subscription
+// Reactivate a specific subscription
 exports.reactivate = async (req, res) => {
-  try {
-    const subscription = await Subscription.findOne({ userId: req.user.id });
+    try {
+        const { subscriptionId } = req.body; // The DB ID of the subscription
+        if (!subscriptionId) {
+            return res.status(400).json({ success: false, message: 'Subscription ID is required.' });
+        }
+        const subscription = await Subscription.findOne({ _id: subscriptionId, userId: req.user.id });
 
-    if (!subscription?.stripeSubscriptionId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No subscription to reactivate'
-      });
+        if (!subscription?.stripeSubscriptionId) {
+            return res.status(400).json({ success: false, message: 'No subscription to reactivate.' });
+        }
+
+        await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+            cancel_at_period_end: false
+        });
+
+        subscription.cancelAtPeriodEnd = false;
+        await subscription.save();
+
+        res.json({ success: true, message: 'Subscription reactivated', data: subscription });
+    } catch (error) {
+        console.error('Reactivate subscription error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
-
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: false
-    });
-
-    subscription.cancelAtPeriodEnd = false;
-    await subscription.save();
-
-    res.json({
-      success: true,
-      message: 'Subscription reactivated',
-      data: subscription
-    });
-  } catch (error) {
-    console.error('Reactivate subscription error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
 };
 
 // Stripe webhook handler
 exports.handleWebhook = async (req, res) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error('CRITICAL ERROR: STRIPE_WEBHOOK_SECRET is not set. Aborting.');
+    return res.status(500).send('Webhook secret not configured.');
+  }
+
   const sig = req.headers['stripe-signature'];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   try {
+    const stripeObject = event.data.object;
+
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object;
-        await handleCheckoutComplete(session);
+        const session = stripeObject;
+        const subscription = await stripe.subscriptions.retrieve(session.subscription);
+        // Pass metadata from the session, which contains our internal IDs
+        await syncSubscription(subscription, session.metadata);
         break;
       }
 
-      case 'customer.subscription.updated': {
-        const stripeSubscription = event.data.object;
-        await handleSubscriptionUpdate(stripeSubscription);
-        break;
-      }
-
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        const stripeSubscription = event.data.object;
-        await handleSubscriptionCancel(stripeSubscription);
+        // For these events, metadata is on the subscription object itself
+        await syncSubscription(stripeObject, stripeObject.metadata);
         break;
       }
-
+      
       case 'invoice.payment_succeeded': {
-        const invoice = event.data.object;
-        await handlePaymentSuccess(invoice);
+        const subscription = await Subscription.findOne({ stripeCustomerId: stripeObject.customer });
+        if (subscription) {
+          subscription.usage.aiQueriesThisMonth = 0;
+          subscription.usage.lastResetDate = new Date();
+          await subscription.save();
+        }
         break;
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object;
-        await handlePaymentFailed(invoice);
+        const subscription = await Subscription.findOne({ stripeCustomerId: stripeObject.customer });
+        if (subscription) {
+          subscription.status = 'past_due';
+          await subscription.save();
+        }
         break;
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        // Unhandled event type
     }
 
     res.json({ received: true });
@@ -276,154 +300,25 @@ exports.handleWebhook = async (req, res) => {
   }
 };
 
-// Helper: Handle checkout complete
-async function handleCheckoutComplete(session) {
-  const userId = session.metadata?.userId;
-  if (!userId) return;
-
-  const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
-  const priceId = stripeSubscription.items.data[0].price.id;
-
-  // Determine tier from price
-  let tier = 'pro';
-  if (priceId === STRIPE_PRICES.elite_monthly || priceId === STRIPE_PRICES.elite_yearly) {
-    tier = 'elite';
-  }
-
-  // Update Subscription model
-  await Subscription.findOneAndUpdate(
-    { userId },
-    {
-      tier,
-      status: 'active',
-      stripeSubscriptionId: stripeSubscription.id,
-      stripePriceId: priceId,
-      currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-      cancelAtPeriodEnd: false
-    },
-    { upsert: true }
-  );
-
-  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
-  await User.findByIdAndUpdate(userId, {
-    'subscription.tier': tier,
-    'subscription.status': 'active',
-    'subscription.stripeCustomerId': stripeSubscription.customer,
-    'subscription.stripeSubscriptionId': stripeSubscription.id,
-    'subscription.currentPeriodStart': new Date(stripeSubscription.current_period_start * 1000),
-    'subscription.currentPeriodEnd': new Date(stripeSubscription.current_period_end * 1000),
-    'subscription.cancelAtPeriodEnd': false
-  });
-
-  console.log(`Subscription activated for user ${userId}: ${tier} (synced to User model)`);
-}
-
-// Helper: Handle subscription update
-async function handleSubscriptionUpdate(stripeSubscription) {
-  const subscription = await Subscription.findOne({
-    stripeSubscriptionId: stripeSubscription.id
-  });
-
-  if (!subscription) return;
-
-  const priceId = stripeSubscription.items.data[0].price.id;
-  let tier = 'pro';
-  if (priceId === STRIPE_PRICES.elite_monthly || priceId === STRIPE_PRICES.elite_yearly) {
-    tier = 'elite';
-  }
-
-  subscription.tier = tier;
-  subscription.status = stripeSubscription.status;
-  subscription.stripePriceId = priceId;
-  subscription.currentPeriodStart = new Date(stripeSubscription.current_period_start * 1000);
-  subscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
-  subscription.cancelAtPeriodEnd = stripeSubscription.cancel_at_period_end;
-
-  await subscription.save();
-
-  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
-  await User.findByIdAndUpdate(subscription.userId, {
-    'subscription.tier': tier,
-    'subscription.status': stripeSubscription.status,
-    'subscription.currentPeriodStart': new Date(stripeSubscription.current_period_start * 1000),
-    'subscription.currentPeriodEnd': new Date(stripeSubscription.current_period_end * 1000),
-    'subscription.cancelAtPeriodEnd': stripeSubscription.cancel_at_period_end
-  });
-}
-
-// Helper: Handle subscription cancel
-async function handleSubscriptionCancel(stripeSubscription) {
-  const subscription = await Subscription.findOne({
-    stripeSubscriptionId: stripeSubscription.id
-  });
-
-  if (!subscription) return;
-
-  subscription.tier = 'free';
-  subscription.status = 'canceled';
-  subscription.stripeSubscriptionId = null;
-  subscription.stripePriceId = null;
-
-  await subscription.save();
-
-  // CRITICAL: Sync User model subscription field (used by FORGE AI limits)
-  await User.findByIdAndUpdate(subscription.userId, {
-    'subscription.tier': 'free',
-    'subscription.status': 'canceled',
-    'subscription.stripeSubscriptionId': null
-  });
-}
-
-// Helper: Handle payment success
-async function handlePaymentSuccess(invoice) {
-  const subscription = await Subscription.findOne({
-    stripeCustomerId: invoice.customer
-  });
-
-  if (!subscription) return;
-
-  // Reset monthly usage
-  subscription.usage.aiQueriesThisMonth = 0;
-  subscription.usage.lastResetDate = new Date();
-  await subscription.save();
-}
-
-// Helper: Handle payment failed
-async function handlePaymentFailed(invoice) {
-  const subscription = await Subscription.findOne({
-    stripeCustomerId: invoice.customer
-  });
-
-  if (!subscription) return;
-
-  subscription.status = 'past_due';
-  await subscription.save();
-}
-
-// Get tier limits
-exports.getTierLimits = async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: Subscription.TIER_LIMITS
-    });
-  } catch (error) {
-    console.error('Get tier limits error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Check if action is allowed
+// Check if action is allowed for a specific creator's subscription
 exports.checkLimit = async (req, res) => {
   try {
     const { action } = req.params;
-    let subscription = await Subscription.findOne({ userId: req.user.id });
+    const { creatorId } = req.query;
+
+    if (!creatorId) {
+      return res.status(400).json({ success: false, message: 'creatorId query parameter is required.' });
+    }
+
+    const subscription = await Subscription.findOne({ userId: req.user.id, creatorId });
 
     if (!subscription) {
-      subscription = await Subscription.create({
-        userId: req.user.id,
-        tier: 'free'
+      // If no specific subscription, check against 'free' tier limits
+      const limits = Subscription.TIER_LIMITS['free'];
+      const allowed = limits[action] !== false && limits[action] > 0;
+      return res.json({
+        success: true,
+        data: { allowed, tier: 'free', usage: {} }
       });
     }
 

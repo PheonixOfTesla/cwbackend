@@ -1,3 +1,4 @@
+
 // Src/middleware/auth.js - ClockWork B2C/B2B Authentication Middleware
 
 const jwt = require('jsonwebtoken');
@@ -39,7 +40,8 @@ const protect = async (req, res, next) => {
                 });
             }
 
-            req.user = await User.findById(userIdToFind).select('-password');
+            // Populate the virtual subscriptions array
+            req.user = await User.findById(userIdToFind).populate('subscriptions').select('-password');
 
             if (!req.user) {
                 return res.status(401).json({
@@ -146,20 +148,15 @@ const requireAICoachAccess = (req, res, next) => {
 
 // Require active subscription
 const requireActiveSubscription = (req, res, next) => {
-    if (req.user && req.user.hasActiveSubscription()) {
-        next();
-    } else {
-        res.status(403).json({
-            success: false,
-            message: 'Active subscription required'
-        });
-    }
+    // TODO: Refactor this logic. It needs to know WHICH subscription to check.
+    // This probably needs to be a controller-level check, not a generic middleware.
+    res.status(501).json({ success: false, message: 'Subscription check not implemented for multi-sub model.' });
 };
 
 // Require pro subscription (individuals)
 const requireProSubscription = (req, res, next) => {
-    const tier = req.user?.subscription?.tier;
-    if (tier === 'pro' || tier?.startsWith('coach_')) {
+    const hasPro = req.user?.subscriptions?.some(s => s.tier === 'pro' || s.tier?.startsWith('coach_'));
+    if (hasPro) {
         next();
     } else {
         res.status(403).json({
@@ -171,8 +168,8 @@ const requireProSubscription = (req, res, next) => {
 
 // Require coach subscription
 const requireCoachSubscription = (req, res, next) => {
-    const tier = req.user?.subscription?.tier;
-    if (tier?.startsWith('coach_')) {
+    const hasCoachSub = req.user?.subscriptions?.some(s => s.tier?.startsWith('coach_'));
+    if (hasCoachSub) {
         next();
     } else {
         res.status(403).json({
@@ -198,7 +195,8 @@ const optionalAuth = async (req, res, next) => {
                 const userIdToFind = decoded.id || decoded.userId || decoded._id;
 
                 if (userIdToFind) {
-                    req.user = await User.findById(userIdToFind).select('-password');
+                    // Populate the virtual subscriptions array
+                    req.user = await User.findById(userIdToFind).populate('subscriptions').select('-password');
                     if (req.user) {
                         req.user.id = req.user._id.toString();
                         req.user.userId = req.user._id.toString();
@@ -218,10 +216,10 @@ const optionalAuth = async (req, res, next) => {
 // LEGACY ADMIN MIDDLEWARE (for backwards compatibility)
 // ============================================
 const admin = (req, res, next) => {
-    // Check for old admin role or coach_enterprise tier
-    if (req.user &&
-        (req.user.subscription?.tier === 'coach_enterprise' ||
-         (req.user.roles && req.user.roles.includes('admin')))) {
+    const hasAdminTier = req.user?.subscriptions?.some(s => s.tier === 'coach_enterprise');
+    const hasAdminRole = req.user?.roles?.includes('admin');
+
+    if (req.user && (hasAdminTier || hasAdminRole)) {
         next();
     } else {
         res.status(403).json({
@@ -245,7 +243,8 @@ module.exports = {
     requireCoachOrIndividual,
     requireAICoachAccess,
     // Subscription middleware
-    requireActiveSubscription,
-    requireProSubscription,
-    requireCoachSubscription
+    // TODO: Review and re-enable these with updated logic if needed.
+    // requireActiveSubscription,
+    // requireProSubscription,
+    // requireCoachSubscription
 };

@@ -1,3 +1,4 @@
+
 // Src/models/User.js - ClockWork B2C/B2B Hybrid Model
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -201,7 +202,7 @@ const userSchema = new mongoose.Schema({
     },
     pricing: {
       subscriptionPrice: { type: Number, default: 999 },  // $9.99 for content
-      coachingPrice: { type: Number, default: 14999 }     // $149.99 for 1:1
+      coachingPrice: { type: Number, default: 14999 }     // 49.99 for 1:1
     },
 
     // ═══════════════════════════════════════════════════════════
@@ -237,37 +238,6 @@ const userSchema = new mongoose.Schema({
           default: false
         }
       }
-    }
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // SUBSCRIPTION (Replaces gym-based billing)
-  // ═══════════════════════════════════════════════════════════
-  subscription: {
-    tier: {
-      type: String,
-      enum: ['free', 'pro', 'vip', 'coach_starter', 'coach_pro', 'coach_scale', 'coach_enterprise'],
-      default: 'free'
-    },
-    status: {
-      type: String,
-      enum: ['active', 'canceled', 'past_due', 'trialing', 'inactive', 'trial_expired'],
-      default: 'active'
-    },
-    stripeCustomerId: String,
-    stripeSubscriptionId: String,
-    currentPeriodStart: Date,
-    currentPeriodEnd: Date,
-    cancelAtPeriodEnd: {
-      type: Boolean,
-      default: false
-    },
-    // 24-hour free trial
-    trialStartDate: Date,
-    trialEndDate: Date,
-    trialUsed: {
-      type: Boolean,
-      default: false
     }
   },
 
@@ -642,16 +612,33 @@ const userSchema = new mongoose.Schema({
     competitionMode: { type: Boolean, default: false }
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes - Updated for new structure
-// Note: email index is created automatically by 'unique: true' on the field
+// ═══════════════════════════════════════════════════════════
+// VIRTUALS
+// ═══════════════════════════════════════════════════════════
+
+// Link to the Subscription model
+userSchema.virtual('subscriptions', {
+  ref: 'Subscription',
+  localField: '_id',
+  foreignField: 'userId'
+});
+
+
+// ═══════════════════════════════════════════════════════════
+// INDEXES
+// ═══════════════════════════════════════════════════════════
 userSchema.index({ userType: 1 });
 userSchema.index({ coachId: 1 });
-userSchema.index({ 'subscription.tier': 1 });
-userSchema.index({ 'subscription.status': 1 });
 userSchema.index({ 'coachProfile.handle': 1 }, { unique: true, sparse: true }); // For @handle lookups
+
+// ═══════════════════════════════════════════════════════════
+// MIDDLEWARE
+// ═══════════════════════════════════════════════════════════
 
 // Hash password on save
 userSchema.pre('save', async function(next) {
@@ -671,6 +658,10 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
+// ═══════════════════════════════════════════════════════════
+// METHODS
+// ═══════════════════════════════════════════════════════════
+
 // Compare password
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
@@ -689,67 +680,6 @@ userSchema.methods.isIndividual = function() {
 // Check if user is a client (has human coach)
 userSchema.methods.isClient = function() {
   return this.userType === 'client';
-};
-
-// Check subscription tier limits
-userSchema.methods.getClientLimit = function() {
-  const limits = {
-    'coach_starter': 10,
-    'coach_pro': 50,
-    'coach_scale': 150,
-    'coach_enterprise': Infinity
-  };
-  return limits[this.subscription?.tier] || 0;
-};
-
-// Check if subscription is active
-userSchema.methods.hasActiveSubscription = function() {
-  return this.subscription?.status === 'active' || this.isTrialActive();
-};
-
-// Check if trial is currently active
-userSchema.methods.isTrialActive = function() {
-  if (this.subscription?.status !== 'trialing') return false;
-  if (!this.subscription?.trialEndDate) return false;
-  return new Date() < new Date(this.subscription.trialEndDate);
-};
-
-// Get remaining trial time in hours
-userSchema.methods.getTrialRemainingHours = function() {
-  if (!this.isTrialActive()) return 0;
-  const remaining = new Date(this.subscription.trialEndDate) - new Date();
-  return Math.max(0, Math.round(remaining / (1000 * 60 * 60)));
-};
-
-// Check and expire trial if needed
-userSchema.methods.checkTrialExpiration = async function() {
-  if (this.subscription?.status === 'trialing' && !this.isTrialActive()) {
-    this.subscription.status = 'trial_expired';
-    this.subscription.tier = 'free';
-    await this.save();
-    return true; // Trial was expired
-  }
-  return false;
-};
-
-// Get subscription features (returns Pro features during active trial)
-userSchema.methods.getSubscriptionFeatures = function() {
-  const features = {
-    'free': { workoutsPerWeek: 3, aiQueriesPerMonth: 5, wearables: false, mealPlans: false },
-    'pro': { workoutsPerWeek: Infinity, aiQueriesPerMonth: 100, wearables: true, mealPlans: true },
-    'vip': { workoutsPerWeek: Infinity, aiQueriesPerMonth: Infinity, wearables: true, mealPlans: true, prioritySupport: true, betaFeatures: true, exportData: true },
-    'coach_starter': { clients: 10, aiAssist: true, analytics: 'basic', mealPlans: true },
-    'coach_pro': { clients: 50, aiAssist: true, analytics: 'advanced', mealPlans: true },
-    'coach_scale': { clients: 150, aiAssist: true, analytics: 'advanced', whiteLabel: false, mealPlans: true },
-    'coach_enterprise': { clients: Infinity, aiAssist: true, analytics: 'advanced', whiteLabel: true, mealPlans: true }
-  };
-
-  // During active trial, give Pro features regardless of tier
-  if (this.isTrialActive()) {
-    return { ...features['pro'], isTrial: true, trialHoursRemaining: this.getTrialRemainingHours() };
-  }
-
-  return features[this.subscription?.tier] || features['free'];
 };
 
 // Ensure wearableConnections is always an array in JSON
@@ -776,3 +706,4 @@ userSchema.methods.toJSON = function() {
 };
 
 module.exports = mongoose.model('User', userSchema);
+
