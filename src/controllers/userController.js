@@ -108,6 +108,34 @@ exports.getProfile = async (req, res) => {
 };
 
 /**
+ * GET /api/users/subscriptions
+ * Get all subscriptions for the current user
+ */
+exports.getSubscriptions = async (req, res) => {
+  try {
+    // The 'subscriptions' virtual field is populated by the 'protect' middleware
+    // We need to re-query to populate the creator details within each subscription
+    const user = await User.findById(req.user.id).populate({
+      path: 'subscriptions',
+      populate: {
+        path: 'creatorId',
+        select: 'name coachProfile.handle coachProfile.profilePicture' // Select fields you want to show
+      }
+    });
+
+    if (!user || !user.subscriptions) {
+      return successResponse(res, []);
+    }
+
+    return successResponse(res, user.subscriptions);
+
+  } catch (error) {
+    console.error('Get subscriptions error:', error);
+    return errorResponse(res, 'Failed to fetch subscriptions', 500, error);
+  }
+};
+
+/**
  * PUT /api/users/profile
  * Update current user's profile
  */
@@ -261,7 +289,7 @@ exports.createUser = async (req, res) => {
     // Validate and normalize roles
     const validatedRoles = validateRoles(roles || ['client']);
     
-    // ✅ FIXED: DO NOT hash password here - let User model do it
+    // ✅ FIXED: DO NOT hash password here - let model do it
     const userData = {
       name: name.trim(),
       email: normalizedEmail,

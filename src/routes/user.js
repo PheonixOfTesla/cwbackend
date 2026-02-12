@@ -50,6 +50,7 @@ router.get('/docs', (req, res) => {
 // ============================================
 router.get('/profile', protect, userController.getProfile);
 router.put('/profile', protect, userController.updateProfile);
+router.get('/subscriptions', protect, userController.getSubscriptions);
 
 // ============================================
 // USER LISTING & CREATION
