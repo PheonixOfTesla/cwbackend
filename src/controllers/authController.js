@@ -395,12 +395,6 @@ exports.resendVerification = async (req, res) => {
 // HELPER: Complete Login (shared logic)
 // ============================================
 async function completeLogin(user, res) {
-    // Check and expire trial if needed
-    const trialExpired = await user.checkTrialExpiration();
-    if (trialExpired) {
-        console.log(`⏰ Trial expired for: ${user.email}`);
-    }
-
     // Auto-upgrade VIP users if in VIP_EMAILS env var
     const wasUpgraded = await checkAndUpgradeVIP(user);
     if (wasUpgraded) {
@@ -418,11 +412,7 @@ async function completeLogin(user, res) {
         { expiresIn: '7d' }
     );
 
-    // Get trial status
-    const isTrialActive = user.isTrialActive();
-    const trialHoursRemaining = user.getTrialRemainingHours();
-
-    console.log(`✅ Login successful for ${user.userType}: ${user.email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
+    console.log(`✅ Login successful for ${user.userType}: ${user.email}`);
 
     // Set HTTP-only cookie (cross-origin compatible)
     res.cookie('token', token, {
@@ -441,11 +431,7 @@ async function completeLogin(user, res) {
             email: user.email,
             userType: user.userType,
             emailVerified: user.emailVerified || false,
-            subscription: {
-                ...user.subscription.toObject(),
-                isTrialActive,
-                trialHoursRemaining
-            },
+            subscription: user.subscription,
             onboarding: user.onboarding,
             coachId: user.coachId
         }
