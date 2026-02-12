@@ -156,11 +156,11 @@ exports.register = async (req, res) => {
             console.error('Welcome email failed:', err.message);
         });
 
-        // Set HTTP-only cookie
+        // Set HTTP-only cookie (cross-origin compatible)
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true,
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
 
@@ -424,11 +424,11 @@ async function completeLogin(user, res) {
 
     console.log(`✅ Login successful for ${user.userType}: ${user.email}${isTrialActive ? ` (Trial: ${trialHoursRemaining}h remaining)` : ''}`);
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie (cross-origin compatible)
     res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: true,
+        sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
@@ -457,6 +457,13 @@ async function completeLogin(user, res) {
 // ============================================
 exports.logout = async (req, res) => {
     try {
+        // Clear the auth cookie
+        res.cookie('token', '', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            expires: new Date(0)
+        });
         res.json({
             success: true,
             message: 'Logout successful'
@@ -1023,11 +1030,11 @@ exports.creatorSignup = async (req, res) => {
 
         console.log(`✅ Creator account created for: ${user.email}`);
 
-        // Set HTTP-only cookie
+        // Set HTTP-only cookie (cross-origin compatible)
         res.cookie('token', authToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true,
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
 
