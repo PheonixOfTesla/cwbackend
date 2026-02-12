@@ -94,8 +94,8 @@ exports.subscribeToCoach = async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: stripePrice.id, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL}/@${coach.coachProfile?.handle || coachId}?subscribed=true`,
-      cancel_url: `${process.env.FRONTEND_URL}/@${coach.coachProfile?.handle || coachId}?cancelled=true`,
+      success_url: `${process.env.FRONTEND_URL}/creator/${coach.coachProfile?.handle || coachId}?subscribed=true`,
+      cancel_url: `${process.env.FRONTEND_URL}/creator/${coach.coachProfile?.handle || coachId}?cancelled=true`,
       metadata: {
         userId: userId.toString(),
         coachId: coachId.toString(),
