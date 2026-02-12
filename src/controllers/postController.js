@@ -133,12 +133,12 @@ exports.getMyPosts = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Only creators can access this' });
     }
 
-    const posts = await Post.find({ coachId })
+    const posts = await Post.find({ coachId, isActive: { $ne: false } })
       .sort({ isPinned: -1, createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
-    const total = await Post.countDocuments({ coachId });
+    const total = await Post.countDocuments({ coachId, isActive: { $ne: false } });
 
     res.json({
       success: true,
