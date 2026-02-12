@@ -67,6 +67,19 @@ const syncSubscription = async (stripeSubscription, metadata = {}) => {
   console.log(`Subscription synced for user ${userId} to creator ${creatorId}: Tier ${tier}, Status ${subscriptionData.status}`);
 };
 
+// Get tier limits (public)
+exports.getTierLimits = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: Subscription.TIER_LIMITS
+    });
+  } catch (error) {
+    console.error('Get tier limits error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Get current subscription status for a specific creator
 exports.getStatus = async (req, res) => {
     try {
