@@ -1267,7 +1267,7 @@ exports.getPublicProfile = async (req, res) => {
         stats: profile.stats || { clientsCoached: 0, followers: 0 },
         pricing: profile.pricing || { subscriptionPrice: 999, coachingPrice: 14999 },
         socialLinks: profile.socialLinks || {},
-        links: (profile.links || []).filter(l => l.isActive).sort((a, b) => a.order - b.order),
+        links: (profile.links || []).filter(l => l.active !== false).sort((a, b) => (a.order || 0) - (b.order || 0)),
         affiliateCodes: profile.affiliateCodes || [],
         scheduling: profile.scheduling || {},
         memberSince: coach.createdAt
