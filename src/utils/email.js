@@ -4,6 +4,7 @@ const { welcomeTemplate } = require('../templates/emails/welcome');
 const { influencerApprovalTemplate } = require('../templates/emails/influencerApproval');
 const { influencerDenialTemplate } = require('../templates/emails/influencerDenial');
 const { newInfluencerWelcomeTemplate } = require('../templates/emails/newInfluencerWelcome');
+const { temporaryPasswordTemplate } = require('../templates/emails/temporaryPassword');
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@clockwork.fit';
@@ -101,6 +102,15 @@ const sendNewInfluencerWelcomeEmail = async (email, name, password) => {
     return sendEmail(email, subject, html);
 };
 
+/**
+ * Send temporary password to admin-created user
+ */
+const sendTemporaryPasswordEmail = async (email, name, tempPassword) => {
+    const html = temporaryPasswordTemplate(name, tempPassword);
+    const subject = `Your ClockWork Account - Temporary Password`;
+    return sendEmail(email, subject, html);
+};
+
 module.exports = {
     sendEmail,
     sendPasswordResetCode,
@@ -108,5 +118,6 @@ module.exports = {
     sendWelcomeEmail,
     sendInfluencerApprovalEmail,
     sendInfluencerDenialEmail,
-    sendNewInfluencerWelcomeEmail
+    sendNewInfluencerWelcomeEmail,
+    sendTemporaryPasswordEmail
 };

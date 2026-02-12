@@ -10,6 +10,9 @@ router.use(requireAdmin);
 // GET /api/admin/users - List all users with search/filter
 router.get('/users', adminController.getUsers);
 
+// POST /api/admin/users/create - Create new user with temporary password
+router.post('/users/create', adminController.createUser);
+
 // GET /api/admin/stats - App insights and statistics
 router.get('/stats', adminController.getStats);
 

@@ -36,6 +36,18 @@ const userSchema = new mongoose.Schema({
     default: false
   },
 
+  // Force password reset on next login (for admin-created accounts)
+  mustResetPassword: {
+    type: Boolean,
+    default: false
+  },
+
+  // Temporary password flag
+  isTemporaryPassword: {
+    type: Boolean,
+    default: false
+  },
+
   // ═══════════════════════════════════════════════════════════
   // USER TYPE - THE KEY FIELD (B2C/B2B Hybrid)
   // ═══════════════════════════════════════════════════════════

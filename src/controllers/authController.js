@@ -430,12 +430,15 @@ async function completeLogin(user, res) {
         success: true,
         message: 'Login successful',
         token, // Include for backward compatibility with admin/other pages
+        mustResetPassword: user.mustResetPassword || false,
         user: {
             _id: user._id,
             name: user.name,
             email: user.email,
             userType: user.userType,
             emailVerified: user.emailVerified || false,
+            mustResetPassword: user.mustResetPassword || false,
+            isTemporaryPassword: user.isTemporaryPassword || false,
             subscription: user.subscription,
             onboarding: user.onboarding,
             coachId: user.coachId
@@ -810,6 +813,11 @@ exports.changePassword = async (req, res) => {
         }
 
         user.password = await bcrypt.hash(newPassword, 10);
+
+        // Clear temporary password flags
+        user.mustResetPassword = false;
+        user.isTemporaryPassword = false;
+
         await user.save();
 
         console.log(`✅ Password changed for: ${user.email}`);

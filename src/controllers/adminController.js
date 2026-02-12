@@ -931,6 +931,111 @@ const getCoachIncome = async (req, res) => {
   }
 };
 
+// POST /api/admin/users/create - Create new user with temporary password
+const createUser = async (req, res) => {
+  try {
+    const { email, name, userType, sendEmail = true } = req.body;
+
+    // Validate required fields
+    if (!email || !name || !userType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, name, and userType are required'
+      });
+    }
+
+    // Validate userType
+    const validUserTypes = ['member', 'individual', 'coach', 'client', 'influencer'];
+    if (!validUserTypes.includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid userType. Must be one of: ${validUserTypes.join(', ')}`
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email already exists'
+      });
+    }
+
+    // Generate temporary password (8 characters: letters + numbers)
+    const tempPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+    // Create user
+    const user = new User({
+      name,
+      email: email.toLowerCase(),
+      password: tempPassword,
+      userType,
+      mustResetPassword: true,
+      isTemporaryPassword: true,
+      emailVerified: false,
+      subscription: {
+        tier: userType === 'member' ? 'free' : userType,
+        status: 'active',
+        startDate: new Date()
+      }
+    });
+
+    await user.save();
+
+    // Create AICoach profile for paid tiers
+    if (userType === 'individual' || userType === 'client') {
+      const AICoach = require('../models/AICoach');
+      await AICoach.create({ user: user._id });
+    }
+
+    // Generate referral code for creators
+    if (userType === 'coach' || userType === 'influencer') {
+      try {
+        const referralCode = await Earnings.generateReferralCode(name);
+        await Earnings.create({
+          user: user._id,
+          earnerType: userType === 'coach' ? 'coach' : 'referrer',
+          referralCode
+        });
+      } catch (err) {
+        console.error('Referral code generation failed:', err.message);
+      }
+    }
+
+    // Send email with temporary password
+    if (sendEmail) {
+      try {
+        const { sendTemporaryPasswordEmail } = require('../utils/email');
+        await sendTemporaryPasswordEmail(email, name, tempPassword);
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        userType: user.userType,
+        temporaryPassword: !sendEmail ? tempPassword : undefined // Only return if email wasn't sent
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin createUser error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create user',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getUsers,
   getStats,
@@ -945,5 +1050,6 @@ module.exports = {
   getCoachApplications,
   approveCoach,
   rejectCoach,
-  getCoachIncome
+  getCoachIncome,
+  createUser
 };
