@@ -88,31 +88,48 @@ exports.subscribeToCoach = async (req, res) => {
     });
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    // If coach has Stripe Connect, use split payments; otherwise, payments go to platform
+    const sessionConfig = {
       customer: stripeCustomerId,
       payment_method_types: ['card'],
       line_items: [{ price: stripePrice.id, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL}/coach/${coachId}?subscribed=true`,
-      cancel_url: `${process.env.FRONTEND_URL}/coach/${coachId}?cancelled=true`,
+      success_url: `${process.env.FRONTEND_URL}/@${coach.coachProfile?.handle || coachId}?subscribed=true`,
+      cancel_url: `${process.env.FRONTEND_URL}/@${coach.coachProfile?.handle || coachId}?cancelled=true`,
       metadata: {
         userId: userId.toString(),
         coachId: coachId.toString(),
         tier,
         applicationMessage: applicationMessage || ''
-      },
-      subscription_data: {
+      }
+    };
+
+    // Only add transfer_data if coach has Stripe Connect set up
+    if (coach.stripeConnectId) {
+      sessionConfig.subscription_data = {
         application_fee_percent: PLATFORM_FEE_PERCENT,
         transfer_data: {
-          destination: coach.stripeConnectId // Coach's Stripe Connect account
+          destination: coach.stripeConnectId
         },
         metadata: {
           userId: userId.toString(),
           coachId: coachId.toString(),
           tier
         }
-      }
-    });
+      };
+    } else {
+      // No Stripe Connect - payments go to platform, coach can connect later
+      sessionConfig.subscription_data = {
+        metadata: {
+          userId: userId.toString(),
+          coachId: coachId.toString(),
+          tier,
+          pendingCoachPayout: 'true' // Flag for later payout when coach connects Stripe
+        }
+      };
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     res.json({
       success: true,
