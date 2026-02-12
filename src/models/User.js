@@ -164,8 +164,10 @@ const userSchema = new mongoose.Schema({
     // LINKS & AFFILIATE CODES (Linktree replacement)
     // ═══════════════════════════════════════════════════════════
     links: [{
+      id: { type: Number },  // Client-side ID for tracking
       title: { type: String, required: true, maxlength: 100 },
       url: { type: String, required: true },
+      thumbnail: { type: String },  // Cloudinary URL for link thumbnail
       icon: { type: String, default: 'fa-link' },  // FontAwesome class
       type: {
         type: String,
@@ -173,7 +175,9 @@ const userSchema = new mongoose.Schema({
         default: 'other'
       },
       description: { type: String, maxlength: 200 },
-      isActive: { type: Boolean, default: true },
+      isActive: { type: Boolean, default: true },  // Legacy field
+      active: { type: Boolean, default: true },  // New field used by frontend
+      clicks: { type: Number, default: 0 },  // Click tracking
       order: { type: Number, default: 0 }
     }],
 
