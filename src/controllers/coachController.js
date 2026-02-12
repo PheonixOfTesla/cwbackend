@@ -1239,6 +1239,10 @@ exports.getPublicProfile = async (req, res) => {
 
     const profile = coach.coachProfile || {};
 
+    // Fetch posts for this creator
+    const Post = require('../models/Post');
+    const posts = await Post.getForViewer(coach._id, null); // null = not subscribed, shows preview
+
     res.json({
       success: true,
       coach: {
@@ -1259,7 +1263,8 @@ exports.getPublicProfile = async (req, res) => {
         affiliateCodes: profile.affiliateCodes || [],
         scheduling: profile.scheduling || {},
         memberSince: coach.createdAt
-      }
+      },
+      posts: posts || []
     });
 
   } catch (error) {
