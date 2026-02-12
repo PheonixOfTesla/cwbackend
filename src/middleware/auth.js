@@ -230,6 +230,51 @@ const admin = (req, res, next) => {
 };
 
 // ============================================
+// TIER-BASED ACCESS CONTROL (NEW)
+// ============================================
+
+// Check if user is a paid member (INDIVIDUAL, COACH, INFLUENCER, or CLIENT)
+const requirePaidTier = (req, res, next) => {
+    const paidTiers = ['individual', 'coach', 'influencer', 'client'];
+    if (!paidTiers.includes(req.user.userType)) {
+        return res.status(403).json({
+            success: false,
+            message: 'This feature requires a paid subscription',
+            requiredTier: 'individual',
+            currentTier: req.user.userType
+        });
+    }
+    next();
+};
+
+// Check if user is a creator (COACH or INFLUENCER)
+const requireCreator = (req, res, next) => {
+    const creatorTiers = ['coach', 'influencer'];
+    if (!creatorTiers.includes(req.user.userType)) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only creators can access this feature',
+            requiredTier: 'influencer',
+            currentTier: req.user.userType
+        });
+    }
+    next();
+};
+
+// Check if user has dashboard access (not MEMBER)
+const requireDashboardAccess = (req, res, next) => {
+    if (req.user.userType === 'member') {
+        return res.status(403).json({
+            success: false,
+            message: 'Upgrade to access your dashboard',
+            requiredTier: 'individual',
+            currentTier: 'member'
+        });
+    }
+    next();
+};
+
+// ============================================
 // EXPORTS
 // ============================================
 module.exports = {
@@ -242,6 +287,10 @@ module.exports = {
     requireIndividual,
     requireCoachOrIndividual,
     requireAICoachAccess,
+    // New tier-based middleware
+    requirePaidTier,
+    requireCreator,
+    requireDashboardAccess,
     // Subscription middleware
     // TODO: Review and re-enable these with updated logic if needed.
     // requireActiveSubscription,

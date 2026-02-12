@@ -89,7 +89,7 @@ exports.register = async (req, res) => {
         }
 
         // Determine user type and subscription tier
-        const finalUserType = userType || 'individual';
+        const finalUserType = userType || 'member';
         let subscriptionTier = 'free';
         let subscriptionStatus = 'trialing'; // Start everyone on trial
 
@@ -124,22 +124,25 @@ exports.register = async (req, res) => {
 
         await user.save();
 
-        // Create AI Coach profile for individuals and clients
+        // Create AI Coach profile for paid tiers only (individual and client)
+        // Members don't get AI coach until they upgrade
         if (finalUserType === 'individual' || finalUserType === 'client') {
             await AICoach.create({ user: user._id });
         }
 
-        // Generate referral code for new user (PATF system)
-        try {
-            const referralCode = await Earnings.generateReferralCode(name);
-            await Earnings.create({
-                user: user._id,
-                earnerType: finalUserType === 'coach' ? 'coach' : 'referrer',
-                referralCode
-            });
-            console.log(`🎯 Referral code generated: ${referralCode}`);
-        } catch (err) {
-            console.error('Referral code generation failed:', err.message);
+        // Generate referral code only for creators (coach, influencer)
+        if (['coach', 'influencer'].includes(finalUserType)) {
+            try {
+                const referralCode = await Earnings.generateReferralCode(name);
+                await Earnings.create({
+                    user: user._id,
+                    earnerType: finalUserType === 'coach' ? 'coach' : 'referrer',
+                    referralCode
+                });
+                console.log(`🎯 Referral code generated: ${referralCode}`);
+            } catch (err) {
+                console.error('Referral code generation failed:', err.message);
+            }
         }
 
         // Generate token
@@ -1042,6 +1045,62 @@ exports.creatorSignup = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Server error during account creation'
+        });
+    }
+};
+
+// ============================================
+// UPGRADE TO INDIVIDUAL TIER
+// ============================================
+exports.upgradeToIndividual = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (user.userType !== 'member') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only members can upgrade to individual tier',
+                currentTier: user.userType
+            });
+        }
+
+        // Check if they have an active subscription (from Stripe)
+        // This should be called AFTER successful Stripe payment
+
+        user.userType = 'individual';
+        user.subscription = {
+            tier: 'individual',
+            status: 'active',
+            startDate: new Date()
+        };
+
+        // Create AICoach profile
+        const AICoach = require('../models/AICoach');
+        await AICoach.create({ user: user._id });
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Successfully upgraded to Individual tier',
+            user: {
+                id: user._id,
+                userType: user.userType,
+                subscription: user.subscription
+            }
+        });
+    } catch (error) {
+        console.error('Upgrade to individual error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to upgrade account'
         });
     }
 };

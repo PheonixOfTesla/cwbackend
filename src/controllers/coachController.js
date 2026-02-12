@@ -52,7 +52,8 @@ exports.getCoachProfile = async (req, res) => {
     const userId = req.user.id;
 
     // Allow coaches and influencers (both are creators)
-    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
+    // Note: This should be enforced by requireCreator middleware on the route
+    if (!['coach', 'influencer'].includes(req.user.userType)) {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can access this endpoint'
@@ -280,7 +281,8 @@ exports.getMyClients = async (req, res) => {
 
     // Verify user is a coach
     // Allow coaches and influencers (both are creators)
-    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
+    // Note: This should be enforced by requireCreator middleware on the route
+    if (!['coach', 'influencer'].includes(req.user.userType)) {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can access this endpoint'
@@ -1141,7 +1143,8 @@ exports.getSessions = async (req, res) => {
     const { status, from, to } = req.query;
 
     // Allow coaches and influencers (both are creators)
-    if (req.user.userType !== 'coach' && req.user.userType !== 'influencer') {
+    // Note: This should be enforced by requireCreator middleware on the route
+    if (!['coach', 'influencer'].includes(req.user.userType)) {
       return res.status(403).json({
         success: false,
         message: 'Only coaches and influencers can access this endpoint'

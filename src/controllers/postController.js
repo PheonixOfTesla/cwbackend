@@ -13,8 +13,8 @@ exports.createPost = async (req, res) => {
     const coachId = req.user.id;
     const { content, mediaUrl, mediaType, postType, visibility, linkedProductId } = req.body;
 
-    // Allow coaches OR users with coachProfile (creators/influencers)
-    const canPost = req.user.userType === 'coach' || req.user.coachProfile;
+    // Allow coaches and influencers (creators)
+    const canPost = ['coach', 'influencer'].includes(req.user.userType);
     if (!canPost) {
       return res.status(403).json({ success: false, message: 'Only creators can create posts' });
     }

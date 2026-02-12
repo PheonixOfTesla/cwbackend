@@ -5,7 +5,7 @@ const coachController = require('../controllers/coachController');
 const postController = require('../controllers/postController');
 const coachSubscriptionController = require('../controllers/coachSubscriptionController');
 const reviewController = require('../controllers/reviewController');
-const { protect, requireCoach, optionalAuth } = require('../middleware/auth');
+const { protect, requireCoach, optionalAuth, requireCreator, requireDashboardAccess } = require('../middleware/auth');
 const { coachInviteLimiter } = require('../middleware/rateLimiter');
 
 // ============================================
@@ -76,10 +76,10 @@ router.get('/check-handle/:handle', coachController.checkHandleAvailability);
 // ============================================
 
 // GET /api/coach/dashboard - Get coach dashboard stats
-router.get('/dashboard', coachController.getDashboardStats);
+router.get('/dashboard', requireDashboardAccess, coachController.getDashboardStats);
 
 // GET /api/coach/clients - Get all my clients
-router.get('/clients', coachController.getMyClients);
+router.get('/clients', requireCoach, coachController.getMyClients);
 
 // ============================================
 // CLIENT MANAGEMENT (RATE LIMITED)
@@ -154,7 +154,7 @@ router.post('/accept-invitation/:invitationCode', coachController.acceptInvitati
 // ============================================
 
 // POST /api/coach/posts - Create a new post
-router.post('/posts', postController.createPost);
+router.post('/posts', requireCreator, postController.createPost);
 
 // GET /api/coach/posts - Get my posts
 router.get('/posts', postController.getMyPosts);

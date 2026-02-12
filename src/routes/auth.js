@@ -60,6 +60,9 @@ router.put('/change-password', protect, authController.changePassword);
 // Logout (client-side token deletion, but endpoint for consistency)
 router.post('/logout', protect, authController.logout);
 
+// Upgrade from MEMBER to INDIVIDUAL tier
+router.post('/upgrade/individual', protect, authController.upgradeToIndividual);
+
 // ============================================
 // DOCUMENTATION ROUTE
 // ============================================

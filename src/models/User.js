@@ -41,9 +41,9 @@ const userSchema = new mongoose.Schema({
   // ═══════════════════════════════════════════════════════════
   userType: {
     type: String,
-    enum: ['coach', 'client', 'individual', 'influencer'],
+    enum: ['member', 'individual', 'coach', 'client', 'influencer'],
     required: true,
-    default: 'individual'
+    default: 'member'  // Free tier, browse-only
   },
 
   // Coach reference (only for clients)
