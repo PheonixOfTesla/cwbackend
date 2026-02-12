@@ -167,6 +167,7 @@ exports.register = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Welcome! Your 24-hour Pro trial has started.',
+            token, // Include for backward compatibility
             user: {
                 _id: user._id,
                 name: user.name,
@@ -425,6 +426,7 @@ async function completeLogin(user, res) {
     return res.json({
         success: true,
         message: 'Login successful',
+        token, // Include for backward compatibility with admin/other pages
         user: {
             _id: user._id,
             name: user.name,
