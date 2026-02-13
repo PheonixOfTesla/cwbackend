@@ -13,6 +13,12 @@ router.get('/users', adminController.getUsers);
 // POST /api/admin/users/create - Create new user with temporary password
 router.post('/users/create', adminController.createUser);
 
+// PUT /api/admin/users/:userId/type - Update user type
+router.put('/users/:userId/type', adminController.updateUserType);
+
+// PUT /api/admin/users/:userId/tier - Update user tier
+router.put('/users/:userId/tier', adminController.updateUserTier);
+
 // GET /api/admin/stats - App insights and statistics
 router.get('/stats', adminController.getStats);
 

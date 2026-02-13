@@ -1036,6 +1036,121 @@ const createUser = async (req, res) => {
   }
 };
 
+// PUT /api/admin/users/:userId/type - Update user type
+const updateUserType = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { userType } = req.body;
+
+    // Validate user type
+    const validTypes = ['member', 'individual', 'coach', 'influencer', 'client'];
+    if (!validTypes.includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid user type. Must be one of: ${validTypes.join(', ')}`
+      });
+    }
+
+    // Find and update user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const oldType = user.userType;
+    user.userType = userType;
+    await user.save();
+
+    console.log(`[Admin] User type updated: ${user.email} from ${oldType} to ${userType}`);
+
+    res.json({
+      success: true,
+      message: `User type updated to ${userType}`,
+      data: {
+        userId: user._id,
+        email: user.email,
+        oldType,
+        newType: userType
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin updateUserType error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update user type',
+      error: error.message
+    });
+  }
+};
+
+// PUT /api/admin/users/:userId/tier - Update user tier
+const updateUserTier = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { tier } = req.body;
+
+    // Validate tier
+    const validTiers = ['free', 'pro', 'vip', 'elite', 'coach_starter', 'coach_pro', 'coach_scale', 'coach_enterprise'];
+    if (!validTiers.includes(tier)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid tier. Must be one of: ${validTiers.join(', ')}`
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const oldTier = user.subscription?.tier || 'free';
+
+    // Update or create subscription
+    if (!user.subscription) {
+      user.subscription = {};
+    }
+    user.subscription.tier = tier;
+
+    // Set subscription status based on tier
+    if (tier === 'free') {
+      user.subscription.status = 'inactive';
+    } else {
+      user.subscription.status = user.subscription.status || 'active';
+    }
+
+    await user.save();
+
+    console.log(`[Admin] User tier updated: ${user.email} from ${oldTier} to ${tier}`);
+
+    res.json({
+      success: true,
+      message: `User tier updated to ${tier}`,
+      data: {
+        userId: user._id,
+        email: user.email,
+        oldTier,
+        newTier: tier
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin updateUserTier error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update user tier',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getUsers,
   getStats,
@@ -1051,5 +1166,7 @@ module.exports = {
   approveCoach,
   rejectCoach,
   getCoachIncome,
-  createUser
+  createUser,
+  updateUserType,
+  updateUserTier
 };
