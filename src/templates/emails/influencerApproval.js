@@ -28,12 +28,20 @@ const influencerApprovalTemplate = (name, affiliateCode, accountSetupUrl) => {
                 <h3 style="color: #ffffff;">🎯 Your Affiliate Code:</h3>
                 <div class="code" style="background: #2a2a3e; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 18px; letter-spacing: 2px; color: #f97316;">${affiliateCode}</div>
 
-                <h3 style="color: #ffffff;">✅ Next Steps:</h3>
+                <h3 style="color: #ffffff;">✅ How It Works:</h3>
+                <p style="color: #ffffff;">Here's everything you need to know to start earning with ClockWork. First, click the button below to create your creator account using this email address. Once logged in, you'll be taken directly to your Creator Studio dashboard where you can manage your content, track earnings, and access marketing materials.</p>
+
+                <p style="color: #ffffff;">As a ClockWork creator, you earn <strong style="color: #f97316;">90% of all revenue</strong> from subscribers who sign up using your unique affiliate code or referral link. This means when someone subscribes through your link, you keep $26.99 of every $29.99 monthly subscription (or 90% of any plan they choose). Your earnings are tracked in real-time and displayed on your dashboard.</p>
+
+                <p style="color: #ffffff;">To receive payments, you'll need to connect your Stripe account from the Creator Studio settings. Once connected, payouts are processed automatically on the 1st and 15th of each month, with a minimum payout threshold of $50. You can track all pending and completed payouts in your earnings dashboard.</p>
+
+                <p style="color: #ffffff;">Your Creator Studio gives you everything you need to succeed: shareable referral links, downloadable marketing assets, content templates, and detailed analytics showing clicks, conversions, and revenue. You can also create exclusive content for your audience and manage your public creator profile.</p>
+
+                <h3 style="color: #ffffff;">🚀 Quick Start Steps:</h3>
                 <ol style="color: #ffffff;">
-                    <li style="color: #ffffff;"><strong style="color: #ffffff;">Create your creator account</strong> (click the button below)</li>
-                    <li style="color: #ffffff;">Access your Creator Studio dashboard</li>
-                    <li style="color: #ffffff;">Connect your Stripe account to receive payouts</li>
-                    <li style="color: #ffffff;">Start earning <strong style="color: #ffffff;">$4.99 recurring commission</strong> for every paid subscriber</li>
+                    <li style="color: #ffffff;"><strong style="color: #ffffff;">Create your account</strong> using the button below (link expires in 7 days)</li>
+                    <li style="color: #ffffff;"><strong style="color: #ffffff;">Connect Stripe</strong> in Settings to enable payouts</li>
+                    <li style="color: #ffffff;"><strong style="color: #ffffff;">Share your link</strong> with your audience and start earning 90%</li>
                 </ol>
 
                 <div style="text-align: center;">

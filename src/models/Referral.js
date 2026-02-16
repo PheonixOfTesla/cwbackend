@@ -181,7 +181,7 @@ referralSchema.methods.markConverted = async function(subscriptionType, paymentA
   } else {
     this.commission.durationMonths = 12;
     this.commission.expiresAt = new Date(Date.now() + 12 * 30 * 24 * 60 * 60 * 1000);
-    this.commission.rate = 10; // 10% for regular users
+    this.commission.rate = 5;  // 5% for regular users
   }
 
   await this.save();

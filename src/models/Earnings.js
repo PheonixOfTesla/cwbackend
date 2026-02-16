@@ -63,17 +63,17 @@ const earningsSchema = new mongoose.Schema({
     // Referral commission (percentage of referred user's subscription)
     referral: {
       type: Number,
-      default: 10 // 10%
+      default: 5 // 5% of all revenue from referred users
     },
     // Influencer commission (percentage of all conversions)
     influencer: {
       type: Number,
-      default: 15 // 15%
+      default: 90 // 90% to influencer (10% to platform)
     },
     // Coach revenue share (percentage they keep from subscriptions)
     coachShare: {
       type: Number,
-      default: 80 // 80% (platform takes 20%)
+      default: 90 // 90% to coach (10% to platform)
     }
   },
 

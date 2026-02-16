@@ -9,9 +9,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Commission rates (in percentages)
 const COMMISSION_RATES = {
-  referral: 10,      // 10% for 12 months
-  influencer: 15,    // 15% lifetime
-  coachShare: 80     // Coach keeps 80% (platform takes 20%)
+  referral: 5,       // 5% of all revenue from referred users
+  influencer: 90,    // 90% to influencer (10% to platform)
+  coachShare: 90     // 90% to coach (10% to platform)
 };
 
 // ═══════════════════════════════════════════════════════════
